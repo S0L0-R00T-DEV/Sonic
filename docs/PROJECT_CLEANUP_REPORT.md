@@ -1,36 +1,31 @@
-# Project Cleanup Report — 2026-10-20
+# Project Cleanup Report
 
-## Completed
+## 2026-10-20 — Source organization
+
 - Renamed the active UI project directory to `ui/SonicUI`.
 - Removed archived duplicate UI/reference source copies that were no longer needed in the working project.
 - Renamed the archived UI build directory to a neutral historical name.
-- Removed external repository URLs and former source-project names from editable project documentation and source text.
-- Removed obsolete static-site assets and external-project research notes; retained only the release metadata helpers in `ui/SonicUI/docs/`.
-- Added a root README that documents the active source map.
+- Removed obsolete static-site assets and external-project research notes; retained release metadata helpers in `ui/SonicUI/docs/`.
+- Added a root README documenting the active source map.
 
-## Preserved
-Active application source, build scripts, existing release artifacts, and dependency lockfiles were preserved. Legally required third-party license/notice files must remain when required by the licenses of code or dependencies shipped with the application.
+## 2026-10-22 — Generated output and diagnostics
 
-## Validation
-The UI TypeScript check previously completed successfully. Re-run typecheck/build after any further source edits before producing a release. The app's persistent black-square issue remains a separate unresolved defect.
+- Removed regeneratable .NET `bin/` and `obj/` directories under `src/`, preserving packaged .NET outputs under local artifacts.
+- Removed Electron/Vite `out/`, Playwright `test-results/`, and `.eslintcache` from the UI working tree.
+- Moved the older UI output intact to a historical archive location instead of deleting it.
+- Centralized old UI snapshots and batch-import backups under UI diagnostics.
+- Added root and UI `.gitignore` rules for generated .NET/Electron output and test reports.
+- Added `docs/PROJECT_STRUCTURE.md` to describe active source paths and directory responsibilities.
+- Preserved active source, package lockfiles, installers, historical archives, and diagnostic/user-data backups.
 
+## 2026-10-24 — Repository presentation cleanup
 
-## Additional cleanup — 2026-10-22
+- Reworked the root README into a product-oriented project overview with features, architecture, setup, build/test commands, security guidance, and licensing links.
+- Removed the obsolete root helper scripts `build-core.ps1`, `build-preview.ps1`, and `build-cli-queue.ps1`. Their underlying source projects and test projects remain in the repository; build commands are now documented in the README.
+- Updated the project structure guide to match the tracked source tree.
 
-- Inspected the root project and active UI project. Neither folder is currently a Git repository; no Git status/diff protection is available.
-- Removed regeneratable .NET `bin/` and `obj/` directories under `src/` (2,639 files total), preserving packaged .NET outputs under `artifacts/`.
-- Removed Electron/Vite `out/`, Playwright `test-results/`, and `.eslintcache` from `ui/SonicUI/`.
-- Moved the older `ui/SonicUI/dist/` tree intact to `artifacts/archive/historical-ui-dist-20261019/`. It contained older installers and unpacked output; it was preserved, not deleted. Current packager output remains in `ui/SonicUI/dist-sonic/`.
-- Moved the old UI source snapshot and batch-import backup under `ui/SonicUI/diagnostics/deep-research-backup/` to centralize backups without deleting them.
-- Added root `.gitignore` rules for generated .NET/Electron output and updated UI `.gitignore` to include `dist-sonic/` and `playwright-report/`.
-- Added `docs/PROJECT_STRUCTURE.md` with the active source tree and the purpose of key directories.
-- Preserved all active source files, package lockfile, current UI installer, .NET deliverables, historical archives, and large diagnostic/user-data backups.
-- Exact actions recorded in `diagnostics/project-cleanup-20261022.log`.
+## Validation notes
 
-### Post-cleanup verification still required
-
-- Verify final tree and preserved installer paths.
-- Run UI typecheck and a core smoke test. The .NET `bin/` and `obj/` caches were intentionally removed, so a .NET build will recreate them; the cleanup itself did not modify source code.
-
-- Post-cleanup verification completed: UI `npm run typecheck` passed for node, web, E2E, and extension projects; all 11 path/preservation checks passed.
-- Removed 2,639 generated .NET build files (approximately 923 MB); no `src/**/bin` or `src/**/obj` directories remain. These are regenerated on the next .NET build.
+- The UI's TypeScript check previously passed for node, web, E2E, and extension projects. Re-run checks after source changes and before release.
+- Network-dependent end-to-end tests require a suitable non-loopback LAN setup; skipped tests must be reported separately from passed tests.
+- Release readiness requires dependency/security review, complete third-party notices, an SBOM generated from the staged package, packaging checks, and verification of signing state. A successful source build alone is not a release certification.
