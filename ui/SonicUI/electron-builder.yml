@@ -1,0 +1,59 @@
+﻿appId: com.speedofreq.sonic
+productName: Speed-o'-Freq Sonic
+copyright: Copyright 2026 Speed-o'-Freq Sonic
+afterPack: scripts/check-torrent-package.mjs
+afterSign: scripts/generate-package-sbom.mjs
+afterAllArtifactBuild: scripts/generate-release-manifest.mjs
+electronDist: node_modules/electron/dist
+directories:
+  buildResources: build
+  output: dist-sonic
+files:
+  - '!tests/**'
+  - '!patches/**'
+  - '!third-party-license-cache/**'
+  - '!scripts/**'
+  - '!dist/**'
+  - '!dist-sonic/**'
+  - '!docs/**'
+  - '!e2e/**'
+  - '!test-results/**'
+  - '!artifacts/**'
+  - '!diagnostics/**'
+  - '!references/**'
+  - '!Phase0/**'
+  - '!extension/**'
+  - '!.github/**'
+  - '!.vscode/**'
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!node_modules/koffi/{src,vendor,doc}/**'
+  - '!node_modules/koffi/build/koffi/!(linux_x64|linux_arm64|win32_x64|win32_arm64)/**'
+  - '!node_modules/node-datachannel/**'
+  - '!node_modules/webrtc-polyfill/**'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+extraResources:
+  - from: ../../artifacts/cli-queue-20261018/win-x64
+    to: sonic-backend
+asarUnpack:
+  - resources/**
+win:
+  forceCodeSigning: true
+  executableName: SpeedOFreq.Sonic
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  artifactName: Speed-o-Freq-Sonic-x64-setup.exe
+  oneClick: true
+  perMachine: true
+  allowElevation: true
+  runAfterFinish: true
+  allowToChangeInstallationDirectory: false
+  shortcutName: Speed-o'-Freq Sonic
+  uninstallDisplayName: Speed-o'-Freq Sonic
+  createDesktopShortcut: always
+npmRebuild: false

@@ -1,0 +1,346 @@
+﻿@import 'tailwindcss';
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./fonts/Manrope-Variable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('./fonts/RobotoMono-Variable.woff2') format('woff2');
+}
+
+:root {
+  color-scheme: light;
+  --bg: #0868d7;
+  --bg-secondary: #0757b8;
+  --bg-tertiary: #0b4da2;
+  --input-bg: #0757b8;
+  --track-bg: #0b4da2;
+  --text: #ffffff;
+  --text-secondary: #f1f6ff;
+  --text-tertiary: #ffffff;
+  --border: #3986e6;
+  --border-subtle: #2478df;
+  --border-strong: #8bbaff;
+  --footer-border: #3986e6;
+  --icon-muted: #8bbaff;
+  --icon-muted-strong: #b8d5ff;
+  --scrollbar-thumb: #8bbaff;
+  --checkbox-shadow: rgba(0, 0, 0, 0.15);
+  --checkbox-inset-shadow: rgba(0, 0, 0, 0.04);
+  --hero-bg: linear-gradient(180deg, #0878f5 0%, #0757b8 100%);
+  --hero-border: #3986e6;
+  --color-wifi: #1f8a70;
+  --color-wifi-bg: #e6f6f2;
+  --color-wifi-border: #b8e6dc;
+  --color-wifi-text: #0e6b54;
+  --color-wifi-onsolid: #ffffff;
+  --color-usb: #d97706;
+  --color-usb-bg: #fef3c7;
+  --color-usb-border: #fde68a;
+  --color-usb-text: #92400e;
+  --color-usb-onsolid: #ffffff;
+  --color-ethernet: #4f64a5;
+  --color-ethernet-bg: #edf0f8;
+  --color-ethernet-border: #cbd3ed;
+  --color-ethernet-text: #374984;
+  --color-ethernet-onsolid: #ffffff;
+  --color-neutral: #6b7280;
+  --color-neutral-bg: #f3f4f6;
+  --color-neutral-border: #e5e7eb;
+  --color-neutral-text: #4b5563;
+  --color-neutral-onsolid: #ffffff;
+  --swatch-teal: #1f8a70;
+  --swatch-teal-onsolid: #ffffff;
+  --swatch-amber: #d97706;
+  --swatch-amber-onsolid: #ffffff;
+  --swatch-steel: #4f64a5;
+  --swatch-steel-onsolid: #ffffff;
+  --swatch-rose: #b5525a;
+  --swatch-rose-onsolid: #ffffff;
+  --swatch-violet: #6c5ac4;
+  --swatch-violet-onsolid: #ffffff;
+  --swatch-lime: #5b8a1e;
+  --swatch-lime-onsolid: #ffffff;
+  --swatch-cyan: #0e7d93;
+  --swatch-cyan-onsolid: #ffffff;
+  --swatch-coral: #c4572a;
+  --swatch-coral-onsolid: #ffffff;
+  --color-accent: #e5252a;
+  --color-accent-onsolid: #ffffff;
+  --color-success: #ffffff;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+  --node-accent: #ffffff;
+  --radius: 8px;
+}
+@theme inline {
+  --font-sans: 'Manrope', -apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, sans-serif;
+  --font-mono: 'Roboto Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--bg-secondary);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--bg-secondary);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: var(--color-accent-onsolid);
+  --color-secondary: var(--bg-tertiary);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--track-bg);
+  --color-muted-foreground: var(--text-tertiary);
+  --color-destructive: var(--color-danger);
+  --color-border: var(--border);
+  --color-input: var(--border-strong);
+  --color-ring: var(--color-accent);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+/* Default Sonic mode: signature electric blue surfaces, red action accents, white text. */
+:root[data-theme='sonic'] {
+  color-scheme: dark;
+  --bg: #0868d7;
+  --bg-secondary: #0757b8;
+  --bg-tertiary: #0b4da2;
+  --input-bg: #0757b8;
+  --track-bg: #0b4da2;
+  --text: #ffffff;
+  --text-secondary: #f1f6ff;
+  --text-tertiary: #ffffff;
+  --border: #3986e6;
+  --border-subtle: #2478df;
+  --border-strong: #8bbaff;
+  --footer-border: #3986e6;
+  --icon-muted: #8bbaff;
+  --icon-muted-strong: #b8d5ff;
+  --scrollbar-thumb: #8bbaff;
+  --hero-bg: linear-gradient(180deg, #0878f5 0%, #0757b8 100%);
+  --hero-border: #3986e6;
+  --color-accent: #e5252a;
+  --color-accent-onsolid: #ffffff;
+  --color-success: #ffffff;
+  --color-danger: #ff6b70;
+  --color-danger-bg: #301012;
+  --color-danger-border: #6a2428;
+  --node-accent: #ffffff;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #050505;
+  --bg-secondary: #111111;
+  --bg-tertiary: #1b1b1b;
+  --input-bg: #111111;
+  --track-bg: #292929;
+  --text: #ffffff;
+  --text-secondary: #f0f0f0;
+  --text-tertiary: #d0d0d0;
+  --border: #333333;
+  --border-subtle: #242424;
+  --border-strong: #555555;
+  --footer-border: #333333;
+  --icon-muted: #666666;
+  --icon-muted-strong: #999999;
+  --scrollbar-thumb: #555555;
+  --hero-bg: linear-gradient(180deg, #171717 0%, #050505 100%);
+  --hero-border: #3b3b3b;
+  --color-accent: #e5252a;
+  --color-accent-onsolid: #ffffff;
+  --color-success: #ffffff;
+  --color-danger: #ff6b70;
+  --color-danger-bg: #301012;
+  --color-danger-border: #6a2428;
+  --node-accent: #ffffff;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+  --focus-ring: 3px solid #005fcc;
+  --bg: #fffdf5;
+  --bg-secondary: #fffaf0;
+  --bg-tertiary: #f5efdf;
+  --input-bg: #ffffff;
+  --track-bg: #e8e0cd;
+  --text: #202020;
+  --text-secondary: #45413a;
+  --text-tertiary: #5b5548;
+  --border: #e4d8bc;
+  --border-subtle: #eee5d2;
+  --border-strong: #c9b993;
+  --footer-border: #e4d8bc;
+  --icon-muted: #b9aa88;
+  --icon-muted-strong: #9d8d69;
+  --scrollbar-thumb: #c9b993;
+  --hero-bg: linear-gradient(180deg, #fffdf5 0%, #f8f0dd 100%);
+  --hero-border: #e4d8bc;
+  --color-accent: #e5252a;
+  --color-accent-onsolid: #ffffff;
+  --color-success: #177a45;
+  --color-danger: #b91c1c;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fecaca;
+  --node-accent: #202020;
+}
+/* Layered, not plain global CSS, so Tailwind utility classes still win over these resets.
+   Tailwind puts its own utilities in a later layer than base styles, and unlayered CSS beats
+   every layer regardless of specificity, so an unlayered button font reset here previously
+   overrode every text and font utility on every button in the app. box-sizing, margin and
+   padding resets, and the default font family, are already handled by Tailwind Preflight, so
+   they are not repeated here. Body, html and root element sizing now live as utility classes
+   in index.html instead. */
+@layer base {
+  input,
+  [contenteditable] {
+    user-select: text;
+  }
+
+  button {
+    font: inherit;
+  }
+
+  /* A desktop app: controls keep the arrow, as native ones do; no pointing hand anywhere. */
+  a,
+  button,
+  [role='button'],
+  [role='menuitem'] {
+    cursor: default;
+  }
+
+  /* No core Tailwind utility for scrollbar pseudo-elements. */
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 9999px;
+  }
+}
+
+@keyframes sonic-dash {
+  to {
+    stroke-dashoffset: -60;
+  }
+}
+
+@keyframes sonic-glow {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes sonic-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* UI/UX Pro Max polish: shared interaction tokens and reliable keyboard focus. */
+:root {
+  --motion-fast: 140ms;
+  --motion-standard: 180ms;
+  --focus-ring: 3px solid #00e5ff;
+  --focus-ring-offset: 2px;
+  font-size: 100%;
+}
+
+@layer base {
+  :where(
+    button,
+    [role='button'],
+    a,
+    input,
+    textarea,
+    select,
+    [tabindex]:not([tabindex='-1'])
+  ):focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  :where(button, [role='button'], a) {
+    transition-property: background-color, color, border-color, opacity, box-shadow;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: ease-out;
+  }
+
+  ::selection {
+    color: var(--text);
+    background: color-mix(in srgb, var(--color-accent) 28%, transparent);
+  }
+}
+
+/* Preserve the compact desktop feel while making nested scroll areas visually quieter. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-standard: 0ms;
+  }
+}
+
+:root[lang='ur'] body,
+:root[lang='ur'] button,
+:root[lang='ur'] input,
+:root[lang='ur'] select,
+:root[lang='ur'] textarea {
+  font-family: 'Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Segoe UI', sans-serif;
+}
+
+@media (forced-colors: active) {
+  :where(
+    button,
+    [role='button'],
+    a,
+    input,
+    textarea,
+    select,
+    [tabindex]:not([tabindex='-1'])
+  ):focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 3px;
+  }
+  :where(button, [role='button'], input, textarea, select) {
+    border-color: ButtonText;
+  }
+}

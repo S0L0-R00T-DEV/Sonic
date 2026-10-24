@@ -1,0 +1,67 @@
+# .NET generated output
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Electron / Node generated output
+ui/SonicUI/node_modules/
+ui/SonicUI/out/
+ui/SonicUI/dist/
+ui/SonicUI/dist-sonic/
+ui/SonicUI/test-results/
+ui/SonicUI/playwright-report/
+ui/SonicUI/.eslintcache
+ui/SonicUI/*.tsbuildinfo
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Generated diagnostics, backups, and local distribution artifacts
+/archive/
+/artifacts/
+/diagnostics/
+/ui/SonicUI/diagnostics/
+/ui/SonicUI/third-party-license-cache/
+
+# .NET build output (including nested project output)
+**/bin/
+**/obj/
+**/publish/
+
+# Electron packaging output and test artifacts
+**/node_modules/
+**/out/
+**/dist/
+**/dist-sonic/
+**/test-results/
+**/playwright-report/
+**/*.tsbuildinfo
+**/.eslintcache
+
+# Local environment and signing material
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+*.jks
+*.keystore
+secrets.*
+credentials.*
+
+# Local rollback copies and assistant working notes
+**/*.bak
+**/*.bak-*
+**/*.before
+**/*.before-*
+**/*.orig
+**/*.tmp
+/PROJECT_MEMORY.md

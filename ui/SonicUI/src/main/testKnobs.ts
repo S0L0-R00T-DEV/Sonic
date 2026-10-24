@@ -1,0 +1,88 @@
+import { app } from 'electron'
+import { isIP } from 'node:net'
+import type { NetworkInterfaceInfo } from '../shared/types'
+
+// Overrides for the end-to-end suite (e2e/), read from the environment. A packaged build ignores
+// all of them, so a shipped app can't be steered through its environment variables.
+const env: NodeJS.ProcessEnv = app?.isPackaged === true ? {} : process.env
+
+function positiveNumber(name: string, fallback: number): number {
+  const value = Number(env[name])
+  return value > 0 ? value : fallback
+}
+
+export const testKnobs = {
+  userDataDir: env['SONIC_USER_DATA'],
+  /** Keeps the window off-screen so a test run doesn't pop windows up over the desktop. */
+  hideWindow: env['SONIC_E2E_HIDE_WINDOW'] === '1',
+  blockBytes: positiveNumber('SONIC_E2E_BLOCK_BYTES', 8 * 1024 * 1024),
+  retryBaseDelayMs: positiveNumber('SONIC_E2E_RETRY_BASE_MS', 1000),
+  stallTimeoutMs: positiveNumber('SONIC_E2E_STALL_MS', 20_000),
+  connectTimeoutMs: positiveNumber('SONIC_E2E_CONNECT_MS', 10_000),
+  /** How long a server that keeps answering busy (429, 503, …) is waited out; see
+   * downloadManager.ts. */
+  serverBusyForMs: positiveNumber('SONIC_E2E_SERVER_BUSY_MS', 5 * 60_000),
+  slowWarmupMs: positiveNumber('SONIC_E2E_SLOW_WARMUP_MS', 5_000),
+  slowForMs: positiveNumber('SONIC_E2E_SLOW_FOR_MS', 10_000),
+  silentAfterMs: positiveNumber('SONIC_E2E_SILENT_MS', 5_000),
+  hedgeAfterMs: positiveNumber('SONIC_E2E_HEDGE_MS', 2_000),
+  /** How long a magnet link may take to find peers that send its metadata. */
+  magnetTimeoutMs: positiveNumber('SONIC_E2E_MAGNET_MS', 3 * 60_000),
+  /** Tests turn the DHT off, so a run never reaches out to the internet's DHT nodes. */
+  torrentDht: env['SONIC_E2E_DHT'] !== '0'
+}
+
+/** `SONIC_E2E_STREAMS=2` fixes how many streams each network runs and turns the automatic
+ * sizing off, so a test can count requests. Read on every call rather than once, so a test can
+ * change it between downloads. */
+export function testStreamsPerNetwork(): number | null {
+  if (app?.isPackaged === true) return null
+  const value = Number(process.env['SONIC_E2E_STREAMS'])
+  return value > 0 ? value : null
+}
+
+/** Test-only fault injection for the final staging-file rename. Packaged builds ignore it. */
+export function testPublishRenameError(): string | undefined {
+  return app?.isPackaged === true
+    ? undefined
+    : process.env['SONIC_E2E_PUBLISH_RENAME_ERROR'] || undefined
+}
+
+/** `SONIC_E2E_INTERFACES=a=127.0.0.1,b=192.168.1.5` replaces the real interface list. Read on
+ * every call rather than once, so a test can make a network "disappear" mid-download by
+ * rewriting process.env in the main process. */
+export function testInterfaces(): NetworkInterfaceInfo[] | null {
+  if (app?.isPackaged === true) return null
+  const raw = process.env['SONIC_E2E_INTERFACES']
+  if (raw === undefined) return null
+  return raw
+    .split(',')
+    .filter(Boolean)
+    .map((entry) => {
+      const [id, address, subnet, kind] = entry.split('=')
+      const looksLikeNetmask = /^255(?:\.255){0,3}\.?(?:0(?:\.0){0,2})?$/.test(subnet ?? '')
+      const netmask = looksLikeNetmask ? subnet : undefined
+      const inferredKind =
+        kind === 'usb'
+          ? ('usb' as const)
+          : kind === 'wifi' ||
+              id.toLowerCase().includes('wi-fi') ||
+              id.toLowerCase().includes('wifi')
+            ? ('wifi' as const)
+            : ('ethernet' as const)
+      return {
+        id,
+        device: id,
+        displayName: id,
+        addresses: [
+          {
+            address,
+            family: isIP(address) === 6 ? 6 : 4,
+            subnet: netmask ? undefined : subnet || undefined,
+            ...(netmask ? { netmask } : {})
+          }
+        ],
+        kind: inferredKind
+      }
+    })
+}

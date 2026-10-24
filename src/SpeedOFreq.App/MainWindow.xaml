@@ -1,0 +1,384 @@
+<Window x:Class="SpeedOFreq.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Speed-o'-Freq Sonic" Height="820" Width="1180"
+        MinHeight="600" MinWidth="760" WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBackground}" Foreground="{DynamicResource TextPrimary}"
+        FontFamily="Segoe UI" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Closing="Window_Closing">
+    <Window.Resources>
+        <SolidColorBrush x:Key="AppBackground" Color="#111111"/>
+        <SolidColorBrush x:Key="Surface" Color="#242424"/>
+        <SolidColorBrush x:Key="SurfaceAlt" Color="#303030"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#F3F6FF"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#A8A8A8"/>
+        <SolidColorBrush x:Key="Outline" Color="#3B3B3B"/>
+        <SolidColorBrush x:Key="Accent" Color="#5AA8F2"/>
+        <SolidColorBrush x:Key="AccentText" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="ErrorBrush" Color="#FF6B81"/>
+        <SolidColorBrush x:Key="SuccessBrush" Color="#54D6B0"/>
+        <Style x:Key="BaseButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Outline}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="13,9"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="9" Padding="{TemplateBinding Padding}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="0" ShadowDepth="0" Opacity="0" Color="#57C7FF"/>
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                <Setter TargetName="ButtonBorder" Property="Effect">
+                                    <Setter.Value><DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.22" Color="#57C7FF"/></Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.48"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Background" Value="{DynamicResource Accent}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentText}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+        </Style>
+        <Style x:Key="InputBox" TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Outline}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="11,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource Accent}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="InputBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="9">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="InputBorder" Property="Effect"><Setter.Value><DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.15" Color="#57C7FF"/></Setter.Value></Setter></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="InputComboItem" TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource Accent}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentText}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource SurfaceAlt}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="InputCombo" TargetType="ComboBox">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Outline}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="7,5"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource InputComboItem}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Border x:Name="ComboBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7"/>
+                            <Grid Margin="8,0,7,0" IsHitTestVisible="False">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/></Grid.ColumnDefinitions>
+                                <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                <TextBlock Grid.Column="1" Text="⌄" FontSize="14" Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <ToggleButton x:Name="DropDownToggle" Background="Transparent" BorderThickness="0" Focusable="False" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton"><Border Background="Transparent" CornerRadius="7"/></ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup" AllowsTransparency="True" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" Focusable="False" PopupAnimation="Fade">
+                                <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Outline}" BorderThickness="1" CornerRadius="8" Padding="3" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ScrollViewer MaxHeight="220" SnapsToDevicePixels="True">
+                                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ComboBorder" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True"><Setter TargetName="ComboBorder" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CardTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Outline}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="Effect">
+                <Setter.Value><DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.12" Color="#000000"/></Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                    <Setter Property="Effect"><Setter.Value><DropShadowEffect BlurRadius="22" ShadowDepth="4" Opacity="0.20" Color="#57C7FF"/></Setter.Value></Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0">
+        <Grid x:Name="RootGrid" Margin="20">
+            <StackPanel>
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border Width="48" Height="48" CornerRadius="14" Background="{DynamicResource SurfaceAlt}" BorderBrush="{DynamicResource Outline}" BorderThickness="1">
+                        <TextBlock Text="S/F" Foreground="{DynamicResource TextPrimary}" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="SPEED-O'-FREQ SONIC" FontSize="18" FontWeight="Bold"/>
+                    </StackPanel>
+                </Grid>
+
+
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="FILE URL" Style="{StaticResource FieldLabel}"/>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="UrlTextBox" Style="{StaticResource InputBox}" MinHeight="58" MaxHeight="92" TextWrapping="Wrap" AcceptsReturn="False" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" VerticalContentAlignment="Top" ToolTip="Direct HTTP or HTTPS file URL" TextChanged="UrlTextBox_TextChanged"/>
+                            <Button x:Name="PasteButton" Grid.Column="1" Content="Paste" Style="{StaticResource BaseButton}" Margin="7,0,0,0" Click="PasteButton_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="FILE" Style="{StaticResource FieldLabel}"/>
+                        <Border x:Name="PreviewCard" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" CornerRadius="10" Padding="0" Margin="0,0,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="38" Height="38" CornerRadius="9" Background="{DynamicResource Surface}" VerticalAlignment="Center">
+                                    <TextBlock x:Name="FileTypeIcon" Text="FILE" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="PreviewNameText" Text="Paste a URL and select Analyze to inspect the file" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="PreviewDetailText" Text="Filename · size · content type · range support will appear here" FontSize="10" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="SAVE TO" Style="{StaticResource FieldLabel}"/>
+                        <Grid Margin="0,0,0,13">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="DestinationTextBox" Style="{StaticResource InputBox}" MinHeight="48" MaxHeight="72" TextWrapping="Wrap" AcceptsReturn="False" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" VerticalContentAlignment="Top" ToolTip="Full destination file path; the path wraps onto multiple lines when needed."/>
+                            <Button x:Name="BrowseButton" Grid.Column="1" Content="Browse…" Style="{StaticResource BaseButton}" Margin="7,0,0,0" Click="BrowseButton_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="DOWNLOAD QUEUE" Style="{StaticResource CardTitle}"/>
+                                <TextBlock Text="Add several files; up to three downloads run concurrently." FontSize="10" Foreground="{DynamicResource TextSecondary}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Add to queue" Style="{StaticResource BaseButton}" Margin="6,0,0,0" Click="AddToQueueButton_Click"/>
+                            <Button x:Name="StartQueueButton" Grid.Column="2" Content="Start queue" Style="{StaticResource PrimaryButton}" Margin="6,0,0,0" Click="StartQueueButton_Click"/>
+                            <Button Grid.Column="3" Content="Cancel selected" Style="{StaticResource BaseButton}" Margin="6,0,0,0" Click="CancelQueuedButton_Click"/>
+                            <Button Grid.Column="4" Content="Remove selected" Style="{StaticResource BaseButton}" Margin="6,0,0,0" Click="RemoveSelectedButton_Click"/>
+                            <Button Grid.Column="5" Content="Clear finished" Style="{StaticResource BaseButton}" Margin="6,0,0,0" Click="ClearFinishedButton_Click"/>
+                        </Grid>
+                        <ListView x:Name="QueueListView" Height="135" Background="{DynamicResource SurfaceAlt}" Foreground="{DynamicResource TextPrimary}" BorderBrush="{DynamicResource Outline}" BorderThickness="1" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="ID" DisplayMemberBinding="{Binding Id}" Width="70"/>
+                                    <GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="85"/>
+                                    <GridViewColumn Header="URL" DisplayMemberBinding="{Binding Url}" Width="300"/>
+                                    <GridViewColumn Header="Progress" DisplayMemberBinding="{Binding ProgressText}" Width="210"/>
+                                    <GridViewColumn Header="Speed" DisplayMemberBinding="{Binding Speed}" Width="90"/>
+                                    <GridViewColumn Header="Retries" DisplayMemberBinding="{Binding Retries}" Width="55"/>
+                                    <GridViewColumn Header="Destination" DisplayMemberBinding="{Binding Destination}" Width="300"/>
+                                    <GridViewColumn Header="Details / SHA-256" DisplayMemberBinding="{Binding Details}" Width="360"/>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.1*"/><ColumnDefinition Width="1.1*"/><ColumnDefinition Width="1.8*"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="PARALLELISM" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="ParallelismComboBox" Style="{StaticResource InputCombo}" Height="36" SelectedIndex="2" SelectionChanged="Settings_Changed">
+                                    <ComboBoxItem Content="2 connections" Tag="2"/><ComboBoxItem Content="4 connections" Tag="4"/>
+                                    <ComboBoxItem Content="8 connections" Tag="8"/><ComboBoxItem Content="16 connections" Tag="16"/>
+                                    <ComboBoxItem Content="24 connections" Tag="24"/><ComboBoxItem Content="32 connections" Tag="32"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                <TextBlock Text="CHUNK SIZE" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="ChunkSizeComboBox" Style="{StaticResource InputCombo}" Height="36" SelectedIndex="1" SelectionChanged="Settings_Changed">
+                                    <ComboBoxItem Content="1 MiB" Tag="1048576"/><ComboBoxItem Content="4 MiB" Tag="4194304"/>
+                                    <ComboBoxItem Content="8 MiB" Tag="8388608"/><ComboBoxItem Content="16 MiB" Tag="16777216"/>
+                                    <ComboBoxItem Content="32 MiB" Tag="33554432"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="NETWORK PATHS · SELECT INDEPENDENT LINKS" Style="{StaticResource FieldLabel}"/>
+                                <ListBox x:Name="InterfaceListBox" Height="68" Background="{DynamicResource SurfaceAlt}" Foreground="{DynamicResource TextPrimary}" BorderBrush="{DynamicResource Outline}" BorderThickness="1" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Foreground="{DynamicResource TextPrimary}" Padding="3,1"/>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <Grid Margin="0,4,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="None selected = Windows default route" FontSize="9" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                    <Button x:Name="RefreshPathsButton" Grid.Column="1" Content="Refresh" Style="{StaticResource BaseButton}" Padding="8,3" FontSize="9" Click="RefreshPathsButton_Click"/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                </Border>
+
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1*"/></Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,10,12">
+                        <StackPanel>
+                            <TextBlock Text="Combined download speed" Style="{StaticResource CardTitle}"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock x:Name="SpeedText" Text="0.00 MB/s" FontSize="34" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
+                                    <TextBlock x:Name="SpeedSubText" Text="AVG 0.00 · PEAK 0.00 MB/s" FontSize="10" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <ComboBox x:Name="SpeedUnitComboBox" Grid.Column="1" Width="88" Height="30" Style="{StaticResource InputCombo}" VerticalAlignment="Top" SelectedIndex="0" SelectionChanged="SpeedUnitComboBox_SelectionChanged">
+                                    <ComboBoxItem Content="MB/s" Tag="MB"/><ComboBoxItem Content="Mbps" Tag="Mbps"/>
+                                </ComboBox>
+                            </Grid>
+                            <TextBlock Text="THROUGHPUT · RECENT ACTIVITY" Style="{StaticResource FieldLabel}" Margin="0,14,0,5"/>
+                            <Border Background="{DynamicResource SurfaceAlt}" CornerRadius="8" Padding="5">
+                                <Canvas x:Name="SpeedChart" Height="160" ClipToBounds="True" SizeChanged="SpeedChart_SizeChanged">
+                                    <Polyline x:Name="SpeedChartLine" Stroke="{DynamicResource Accent}" StrokeThickness="2" StrokeLineJoin="Round"/>
+                                </Canvas>
+                            </Border>
+                            <Border Background="{DynamicResource SurfaceAlt}" CornerRadius="9" Padding="10" Margin="0,8,0,0"><StackPanel><TextBlock Text="SEPARATE INTERNET SPEEDS" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,6"/><TextBlock x:Name="InterfaceSpeedText" Text="Waiting for adapter speed samples…" FontSize="11" Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap" LineHeight="19"/></StackPanel></Border>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Download status" Style="{StaticResource CardTitle}"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{DynamicResource Accent}" Margin="0,0,8,0"/>
+                                    <TextBlock x:Name="StatusText" Text="Ready for a direct download" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="ProgressPercentText" Grid.Column="1" Text="0%" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                            </Grid>
+                            <ProgressBar x:Name="DownloadProgressBar" Height="8" Minimum="0" Maximum="100" Value="0" Foreground="{DynamicResource Accent}" Background="{DynamicResource SurfaceAlt}" BorderThickness="0"/>
+                            <TextBlock x:Name="ProgressDetailText" Text="Waiting to start" FontSize="10" Foreground="{DynamicResource TextSecondary}" Margin="0,8,0,8" TextWrapping="Wrap"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <StackPanel><TextBlock Text="RETRIES" Style="{StaticResource FieldLabel}"/><TextBlock x:Name="RetryCountText" Text="0" FontSize="13" FontWeight="Bold"/></StackPanel>
+                                <StackPanel Grid.Column="1"><TextBlock Text="TIME LEFT" Style="{StaticResource FieldLabel}"/><TextBlock x:Name="EtaText" Text="—" FontSize="13" FontWeight="Bold"/></StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,9">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Chunk map" FontSize="14" FontWeight="Bold"/>
+                                <TextBlock x:Name="ChunkSummaryText" Text="Waiting for file details" FontSize="10" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <TextBlock x:Name="PathSpeedText" Grid.Column="1" Text="Network paths: idle" FontSize="10" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        </Grid>
+                        <Border Background="{DynamicResource SurfaceAlt}" CornerRadius="9" Padding="8">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" MaxHeight="100">
+                                <WrapPanel x:Name="ChunkPanel"/>
+                            </ScrollViewer>
+                        </Border>
+                        <TextBlock Text="Each tile represents a byte-range chunk. Exact per-path throughput depends on the server and independently routed links." FontSize="9" Foreground="{DynamicResource TextSecondary}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="FinalStatsCard" Style="{StaticResource Card}" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="LAST DOWNLOAD SUMMARY" Style="{StaticResource CardTitle}"/>
+                        <TextBlock x:Name="FinalStatsText" TextWrapping="Wrap" FontSize="11"
+                                   Foreground="{DynamicResource TextPrimary}" LineHeight="19"
+                                   AutomationProperties.Name="Final download statistics"/>
+                    </StackPanel>
+                </Border>
+
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ResultText" Text="" FontSize="10" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Button x:Name="OpenFolderButton" Grid.Column="1" Content="Open folder" Style="{StaticResource BaseButton}" Margin="0,0,7,0" IsEnabled="False" Click="OpenFolderButton_Click"/>
+                    <Button x:Name="PauseButton" Grid.Column="2" Content="Pause" Style="{StaticResource BaseButton}" Margin="0,0,7,0" IsEnabled="False" Click="PauseButton_Click"/>
+                    <Button x:Name="CancelButton" Grid.Column="3" Content="Cancel" Style="{StaticResource BaseButton}" Margin="0,0,7,0" IsEnabled="False" Click="CancelButton_Click"/>
+                    <Button x:Name="AnalyzeButton" Grid.Column="4" Content="Analyze URL" Style="{StaticResource BaseButton}" Margin="0,0,7,0" Click="AnalyzeButton_Click"/>
+                    <Button x:Name="StartButton" Grid.Column="5" Content="Start download" Style="{StaticResource PrimaryButton}" Click="StartButton_Click"/>
+                </Grid>
+                <TextBlock Text="No telemetry · No relay server · Direct HTTP(S) only · Settings are saved locally on this device" FontSize="9" Foreground="{DynamicResource TextSecondary}" Margin="2,0,0,4"/>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Window>

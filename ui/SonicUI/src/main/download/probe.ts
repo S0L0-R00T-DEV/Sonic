@@ -1,0 +1,314 @@
+import { request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
+import { isAbsolute } from 'node:path'
+import { URL } from 'node:url'
+import type { BrowserContext, ProbeResult } from '../../shared/types'
+import { testKnobs } from '../testKnobs'
+import { requestHeaders } from './browserContext'
+import { probeFtpUrl } from './ftpProtocol'
+import { parseMetalinkManifest } from './metalink'
+import { parseContentDispositionFilename } from './contentDisposition'
+import { inspectMediaManifest } from './mediaStreams'
+import {
+  describeTorrent,
+  downloadTorrentFile,
+  fetchMagnetMetadata,
+  readTorrentFile
+} from './torrent/metadata'
+
+const MAX_REDIRECTS = 5
+// A server that accepts the connection and never answers would otherwise hang the probe — and
+// the link field's "Checking…" — forever. Same budget as a stalled chunk, for the whole probe:
+// redirects included, so a chain of slow hops can't stretch it.
+const PROBE_TIMEOUT_MS = testKnobs.stallTimeoutMs
+const NO_RESPONSE = 'The server did not respond — check the link and try again'
+const MAX_METALINK_BYTES = 2 * 1024 * 1024
+
+async function readMetalinkManifest(url: string): Promise<string> {
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    redirect: 'follow'
+  })
+  if (!response.ok || !response.body)
+    throw new Error(`Could not fetch Metalink manifest (HTTP ${response.status}).`)
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > MAX_METALINK_BYTES) {
+        await reader.cancel()
+        throw new Error('Metalink manifest exceeds the 2 MiB safety limit.')
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const merged = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder('utf-8', { fatal: true }).decode(merged)
+}
+
+function assertHttpProtocol(url: URL): void {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(
+      'HTTP(S) redirects cannot change to another protocol. Open FTP(S) links directly.'
+    )
+  }
+}
+
+type Headers = Record<string, string | string[] | undefined>
+
+function headerValue(headers: Headers, name: string): string | undefined {
+  const value = headers[name]
+  return Array.isArray(value) ? value[0] : value
+}
+
+interface ProbeResponse {
+  statusCode: number
+  headers: Headers
+}
+
+/** GET with a small range: cheaper than fetching the body, and unlike HEAD it also tells us (via
+ * the 206 status) whether range requests actually work. Not 1 byte: some file hosts answer a range
+ * that ends at byte 0 or 1 with the whole file, while serving every real chunk as asked (#101).
+ * `ranged: false` sends a plain GET instead; the body is still dropped once the headers arrive. */
+function requestFirstBytes(
+  url: URL,
+  deadline: number,
+  browser: BrowserContext | undefined,
+  ranged: boolean
+): Promise<ProbeResponse> {
+  return new Promise((resolve, reject) => {
+    const requester = url.protocol === 'https:' ? httpsRequest : httpRequest
+    const req = requester(
+      {
+        method: 'GET',
+        hostname: url.hostname.replace(/^\[|\]$/g, ''),
+        port: url.port || undefined,
+        path: `${url.pathname}${url.search}`,
+        headers: ranged
+          ? { ...requestHeaders(url, browser), Range: 'bytes=0-1023' }
+          : requestHeaders(url, browser)
+      },
+      (res) => {
+        clearTimeout(timer)
+        res.destroy()
+        resolve({ statusCode: res.statusCode ?? 0, headers: res.headers as Headers })
+      }
+    )
+    const timer = setTimeout(
+      () => req.destroy(new Error(NO_RESPONSE)),
+      Math.max(0, deadline - Date.now())
+    )
+    req.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    req.end()
+  })
+}
+
+function fileNameFromHeaders(headers: Headers, url: URL): string {
+  const disposition = headerValue(headers, 'content-disposition')
+  if (disposition) {
+    const parsed = parseContentDispositionFilename(disposition)
+    if (parsed) return parsed
+  }
+  let pathname = url.pathname
+  try {
+    pathname = decodeURIComponent(pathname)
+  } catch {
+    // A malformed %-escape: the raw path still names the file well enough.
+  }
+  const base = pathname.split('/').filter(Boolean).pop()
+  return base && base.length > 0 ? base : 'download'
+}
+
+async function requestFollowingRedirects(
+  rawUrl: string,
+  browser: BrowserContext | undefined
+): Promise<{ current: URL; response: ProbeResponse | null }> {
+  let current = new URL(rawUrl)
+  assertHttpProtocol(current)
+  let response: ProbeResponse | null = null
+  const deadline = Date.now() + PROBE_TIMEOUT_MS
+
+  let ranged = true
+  for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+    response = await requestFirstBytes(current, deadline, browser, ranged)
+    // Some servers refuse any Range request with 403 while serving the same URL in full (#131).
+    // Ask once more without one: if that works, the file downloads as one stream from byte zero,
+    // which sends no Range either — the same as on a server without range support.
+    if (response.statusCode === 403 && ranged) {
+      ranged = false
+      response = await requestFirstBytes(current, deadline, browser, ranged)
+    }
+    if (response.statusCode >= 300 && response.statusCode < 400) {
+      const location = headerValue(response.headers, 'location')
+      if (!location) break
+      if (redirect === MAX_REDIRECTS) {
+        throw new Error('Too many redirects while checking the link')
+      }
+      current = new URL(location, current)
+      // Redirects are untrusted input too; never reinterpret file:, ftp:, or other schemes as HTTP.
+      assertHttpProtocol(current)
+      continue
+    }
+    break
+  }
+
+  return { current, response }
+}
+
+/** A link the server says is a torrent, or that is named like one. */
+function isTorrentLink(headers: Headers, url: URL): boolean {
+  const contentType = headerValue(headers, 'content-type') ?? ''
+  return /^application\/x-bittorrent\b/i.test(contentType) || /\.torrent$/i.test(url.pathname)
+}
+
+/** What a link would download: a file over HTTP(S), or a torrent — a magnet link, a link to a
+ * .torrent, or the path of a .torrent on this computer (opened or dropped on the window).
+ * `browser`: what the browser it came from sends with it (see BrowserContext). */
+export async function probeUrl(rawUrl: string, browser?: BrowserContext): Promise<ProbeResult> {
+  if (/^magnet:/i.test(rawUrl)) return describeTorrent(await fetchMagnetMetadata(rawUrl), rawUrl)
+  if (isAbsolute(rawUrl) && /\.torrent$/i.test(rawUrl)) {
+    return describeTorrent(await readTorrentFile(rawUrl), rawUrl)
+  }
+
+  let initialUrl: URL | undefined
+  try {
+    initialUrl = new URL(rawUrl)
+  } catch {
+    // requestFollowingRedirects below gives the regular URL validation error.
+  }
+  if (initialUrl && (initialUrl.protocol === 'ftp:' || initialUrl.protocol === 'ftps:')) {
+    return probeFtpUrl(rawUrl)
+  }
+
+  const { current, response } = await requestFollowingRedirects(rawUrl, browser)
+
+  // An empty file can't satisfy a request for its first bytes: the server answers 416 and gives
+  // the size as `bytes */0`. That's a valid, empty download, not an error.
+  if (
+    response?.statusCode === 416 &&
+    /^\s*bytes\s+\*\/0\s*$/i.test(headerValue(response.headers, 'content-range') ?? '')
+  ) {
+    return {
+      kind: 'http',
+      requestedUrl: rawUrl,
+      finalUrl: current.toString(),
+      supportsRanges: false,
+      totalBytes: 0,
+      suggestedFileName: fileNameFromHeaders(response.headers, current),
+      contentType: headerValue(response.headers, 'content-type') ?? null,
+      etag: headerValue(response.headers, 'etag') ?? null,
+      lastModified: headerValue(response.headers, 'last-modified') ?? null
+    }
+  }
+
+  if (!response || response.statusCode === 0 || response.statusCode >= 400) {
+    throw new Error(`Server responded with status ${response?.statusCode || 'unknown'}`)
+  }
+
+  if (isTorrentLink(response.headers, current)) {
+    const finalUrl = current.toString()
+    const torrentFile = await downloadTorrentFile(
+      finalUrl,
+      PROBE_TIMEOUT_MS,
+      requestHeaders(current, browser)
+    )
+    return describeTorrent(torrentFile, finalUrl)
+  }
+
+  const contentRange = headerValue(response.headers, 'content-range')
+  // A server that supports range requests must answer our range GET with 206 Partial Content.
+  // If it returned 200 OK, it ignored the Range header and sent the whole file — even if its headers
+  // statically claim `Accept-Ranges: bytes`.
+  const supportsRanges = response.statusCode === 206
+
+  let totalBytes: number | null = null
+  if (contentRange) {
+    const match = /\/(\d+)$/.exec(contentRange)
+    if (match) totalBytes = Number(match[1])
+  }
+  if (totalBytes === null && response.statusCode === 200) {
+    // Only trust Content-Length on a full (200) response — on a 206 it
+    // describes the bytes we asked for, not the whole file.
+    const contentLength = headerValue(response.headers, 'content-length')
+    if (contentLength) totalBytes = Number(contentLength)
+  }
+
+  const contentType = headerValue(response.headers, 'content-type') ?? ''
+  if (
+    /\.(?:metalink|meta4)$/i.test(current.pathname) ||
+    /application\/(?:metalink4\+xml|metalink\+xml)/i.test(contentType)
+  ) {
+    const files = parseMetalinkManifest(await readMetalinkManifest(current.toString()))
+    const first = files[0]
+    const mirror = first.mirrors.find((entry) =>
+      ['http:', 'https:'].includes(new URL(entry.url).protocol)
+    )
+    if (!mirror)
+      throw new Error(
+        `Metalink entry "${first.name}" has no HTTP(S) mirror supported by this build.`
+      )
+    const primary = await probeUrl(mirror.url)
+    if (primary.kind !== 'http' || primary.media)
+      throw new Error('The selected Metalink mirror is not a direct file download.')
+    if (
+      first.size !== undefined &&
+      primary.totalBytes !== null &&
+      first.size !== primary.totalBytes
+    ) {
+      throw new Error(`Metalink size does not match the selected mirror for "${first.name}".`)
+    }
+    return {
+      kind: 'http',
+      requestedUrl: rawUrl,
+      finalUrl: primary.finalUrl,
+      supportsRanges: primary.supportsRanges,
+      totalBytes: first.size ?? primary.totalBytes,
+      suggestedFileName: first.name,
+      contentType: primary.contentType,
+      etag: primary.etag,
+      lastModified: primary.lastModified,
+      metalink: {
+        manifestUrl: current.toString(),
+        files: files.map((file) => ({
+          name: file.name,
+          ...(file.size === undefined ? {} : { size: file.size }),
+          ...(file.sha256 ? { sha256: file.sha256 } : {}),
+          mirrors: file.mirrors
+        }))
+      }
+    }
+  }
+  const media = await inspectMediaManifest(current.toString(), contentType)
+  let suggestedFileName = fileNameFromHeaders(response.headers, current)
+  if (media) {
+    const withoutManifestExtension = suggestedFileName.replace(/\.(?:m3u8|mpd)$/i, '')
+    suggestedFileName = `${withoutManifestExtension || 'media'}.mp4`
+  }
+
+  return {
+    kind: 'http',
+    requestedUrl: rawUrl,
+    finalUrl: current.toString(),
+    supportsRanges: media ? false : supportsRanges,
+    totalBytes: media ? null : totalBytes,
+    suggestedFileName,
+    contentType: contentType || null,
+    etag: headerValue(response.headers, 'etag') ?? null,
+    lastModified: headerValue(response.headers, 'last-modified') ?? null,
+    ...(media ? { media } : {})
+  }
+}

@@ -1,0 +1,57 @@
+diff --git a/node_modules/ip/lib/ip.js b/node_modules/ip/lib/ip.js
+index 9022443..df851c2 100644
+--- a/node_modules/ip/lib/ip.js
++++ b/node_modules/ip/lib/ip.js
+@@ -1,6 +1,7 @@
+ const ip = exports;
+ const { Buffer } = require('buffer');
+ const os = require('os');
++const ipaddr = require('ipaddr.js');
+ 
+ ip.toBuffer = function (ip, buff, offset) {
+   offset = ~~offset;
+@@ -306,31 +307,24 @@ ip.isEqual = function (a, b) {
+ };
+ 
+ ip.isPrivate = function (addr) {
+-  // check loopback addresses first
+-  if (ip.isLoopback(addr)) {
++  // Fail closed for malformed and ambiguous numeric forms. ip@2.0.1's hand-written range
++  // checks miss loopback aliases such as 127.1 and 017700000001, which can bypass public-IP
++  // checks (GHSA-2p57-rm9w-gvfp / CVE-2024-29415).
++  if (typeof addr !== 'string' || addr.length === 0 || addr.trim() !== addr || !ipaddr.isValid(addr)) {
+     return true;
+   }
+ 
+-  // ensure the ipv4 address is valid
+-  if (!ip.isV6Format(addr)) {
+-    const ipl = ip.normalizeToLong(addr);
+-    if (ipl < 0) {
+-      throw new Error('invalid ipv4 address');
++  try {
++    const parsed = ipaddr.parse(addr);
++    // Treat IPv4-mapped IPv6 as non-public; do not let an alternate representation bypass a
++    // public-address gate. Only globally routable unicast addresses are public.
++    if (parsed.kind() === 'ipv6' && parsed.range() === 'ipv4Mapped') {
++      return true;
+     }
+-    // normalize the address for the private range checks that follow
+-    addr = ip.fromLong(ipl);
++    return parsed.range() !== 'unicast';
++  } catch {
++    return true;
+   }
+-
+-  // check private ranges
+-  return /^(::f{4}:)?10\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/i.test(addr)
+-    || /^(::f{4}:)?192\.168\.([0-9]{1,3})\.([0-9]{1,3})$/i.test(addr)
+-    || /^(::f{4}:)?172\.(1[6-9]|2\d|30|31)\.([0-9]{1,3})\.([0-9]{1,3})$/i
+-      .test(addr)
+-    || /^(::f{4}:)?169\.254\.([0-9]{1,3})\.([0-9]{1,3})$/i.test(addr)
+-    || /^f[cd][0-9a-f]{2}:/i.test(addr)
+-    || /^fe80:/i.test(addr)
+-    || /^::1$/.test(addr)
+-    || /^::$/.test(addr);
+ };
+ 
+ ip.isPublic = function (addr) {
