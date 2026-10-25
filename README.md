@@ -1,78 +1,95 @@
 # Speed-o'-Freq Sonic
 
-**A Windows desktop download manager built for control, visibility, and flexible network use.**
+**Sonic is a Windows desktop download manager with an Electron/React interface, a .NET download backend, and a companion command-line interface.**
 
-Sonic combines an Electron/React desktop interface with a .NET download backend. It provides a managed download queue, network and bandwidth controls, torrent workflows, browser-assisted link handoff, and a companion command-line interface for controlling a running desktop session.
+The active desktop UI lives in `ui/SonicUI/`. The repository also contains the .NET/WPF downloader and CLI projects under `src/`; the Electron app integrates a packaged .NET backend. Sonic focuses on managed downloads, queue visibility, browser-assisted handoff, network-interface controls, and local-first operation.
 
-> Sonic's multi-network throughput depends on the server, the routing available on the machine, and whether selected adapters reach the internet through genuinely separate connections. Results vary by download source and network setup.
+> **Performance note:** Sonic does not promise universal system-wide or packet-level multi-WAN bonding. Multi-interface behavior depends on the downloader path, server range support/throttling, machine resources, and genuinely independent upstream connections. Two adapters connected through the same constrained router or ISP do not automatically provide additive bandwidth.
 
 ## Features
 
-- **Download queue:** inspect progress and manage active downloads, including pause, resume, retry, and cancellation where supported.
-- **Direct downloads:** handle HTTP and HTTPS links, with parallel transfer support when the server permits it.
-- **Torrent workflows:** work with magnet links and `.torrent` files, including selecting files from supported torrents.
-- **Network controls:** select or disable available adapters and configure per-network preferences.
-- **Bandwidth management:** set speed limits and use Slow mode to reduce download activity while calls or streaming are in progress.
-- **Queue and history:** manage concurrent downloads and review completed-download history.
-- **Browser integration:** optional extension for sending links to Sonic from supported Chromium-based browsers and Firefox. Automatic interception is off by default and must be explicitly enabled.
-- **CLI control:** query status, inspect downloads, and control the running desktop app through its local Windows named-pipe interface.
+- **Download management:** queue and history workflows, progress reporting, pause/resume/cancel controls, and completion summaries where supported by the active workflow.
+- **HTTP(S) transfers:** segmented/range-based transfers when the origin supports them, with fallback paths for servers that do not support range requests.
+- **Additional protocols and media workflows:** source code includes FTP/FTPS, BitTorrent/magnet, and HLS/DASH-related paths. Support and validation vary by workflow and release; do not assume every path is production-certified.
+- **Network controls:** interface preferences and download scheduling across configured source addresses. This is connection/request-level scheduling, not packet-level bonding.
+- **Browser extensions:** optional extension builds for Chromium-based browsers and Firefox. The extension can hand selected links to Sonic; automatic download capture/interception is opt-in and can be disabled. Sonic does not silently install or enable browser extensions.
+- **CLI control:** the .NET CLI can control the WPF/backend session over a local Windows named pipe. The pipe is local and is not a LAN listener.
+- **Security-oriented behavior:** the project includes input-validation, download-integrity, extension-bridge, dependency-audit, and packaging checks. A passing build alone does not establish release readiness.
 
-Feature availability can depend on the protocol, remote server, adapter configuration, and current release validation.
-
-## Project layout
+## Repository layout
 
 ```text
 Sonic/
 ├── src/
-│   ├── SpeedOFreq.App/       # Windows desktop app and queue service
-│   ├── SpeedOFreq.Core/      # Shared .NET download engine
-│   └── SpeedOFreq.Cli/       # CLI for the running desktop app
+│   ├── SpeedOFreq.App/        # Windows WPF app and backend/queue integration
+│   ├── SpeedOFreq.Core/       # Shared .NET download engine
+│   └── SpeedOFreq.Cli/        # CLI controller
 ├── tests/
-│   └── SpeedOFreq.Core.Smoke/# .NET core smoke tests
+│   └── SpeedOFreq.Core.Smoke/ # Deterministic .NET core smoke tests
 ├── ui/
 │   └── SonicUI/
-│       ├── src/main/         # Electron main process and download services
-│       ├── src/preload/      # Narrow, typed renderer bridge
-│       ├── src/renderer/     # React user interface
-│       ├── extension/        # Browser extension source
-│       ├── e2e/              # Playwright end-to-end tests
-│       ├── tests/            # Focused security and unit tests
-│       └── scripts/          # Packaging, SBOM, and notice tooling
-├── docs/                     # Project structure and cleanup records
-├── PRD.md                    # Product requirements
-├── IMPLEMENTATION_STATUS.md  # Implementation tracking
+│       ├── src/main/          # Electron main process and services
+│       ├── src/preload/       # Restricted renderer bridge
+│       ├── src/renderer/      # React UI
+│       ├── extension/         # Browser extension source/build
+│       ├── tests/             # Unit/security tests
+│       ├── e2e/               # Playwright end-to-end tests
+│       └── scripts/           # Build, security, and notice tooling
+├── docs/                      # Project structure and engineering records
+├── PRD.md                     # Product requirements and decisions
+├── PROJECT_MEMORY.md          # Engineering handoff and source map
 └── CLI_USAGE.md               # CLI command reference
 ```
 
-Generated build output, local dependency directories, test results, and packaged installers should be generated locally or through CI rather than committed as source. Preserve source assets, lockfiles, test fixtures, required license notices, and release evidence.
+Generated build output, dependency directories, caches, test results, local downloads, diagnostics, and credentials are not source inputs for ordinary checkouts. Preserve lockfiles, source assets, required license notices, and release evidence.
+
+## Requirements
+
+- Windows 10 or Windows 11; the active desktop packaging target is Windows x64. Verify the current Windows baseline and package configuration before relying on other architectures.
+- .NET 10 SDK for building the .NET projects.
+- Node.js 22 and npm for the Electron UI.
+- Git for source checkout.
 
 ## Build from source
 
-### Requirements
+### Canonical Windows build
 
-- Windows 10 or Windows 11 for the complete desktop application and .NET WPF components.
-- A supported Node.js/npm toolchain for the Electron UI. Use the version required by the project dependencies and CI workflow.
-- .NET 10 SDK for the Windows app, shared core, CLI, and smoke tests.
+From the repository root, run the PowerShell build entry point:
 
-### Install UI dependencies
+```powershell
+.\build.ps1
+```
+
+Run this from a clean checkout when validating that the build does not depend on local generated files. Review the script and its prerequisites before running a release/package build.
+
+### Electron UI development
 
 ```powershell
 Set-Location ui/SonicUI
 npm ci
+npm run dev
 ```
 
-### Build and validate the UI
+### UI validation
+
+From `ui/SonicUI`:
 
 ```powershell
 npm run typecheck
 npm run lint
+npm run format:check
 npm run build
 npm run build:extension
+npm run test:security
+npm run test:ip-security
+npm run test:e2e:smoke
 ```
 
-### Build the .NET components
+Use the scripts currently declared in `ui/SonicUI/package.json`; some security or packaging gates intentionally block release builds when an advisory or license issue remains unresolved. The full Playwright suite may require a working Windows desktop/runtime environment. Record actual exit codes and test summaries; do not infer that tests passed merely because a process started.
 
-Run these from the repository root:
+### .NET components and smoke tests
+
+From the repository root:
 
 ```powershell
 dotnet build src/SpeedOFreq.App/SpeedOFreq.App.csproj -c Release
@@ -80,34 +97,31 @@ dotnet build src/SpeedOFreq.Cli/SpeedOFreq.Cli.csproj -c Release
 dotnet run --project tests/SpeedOFreq.Core.Smoke/SpeedOFreq.Core.Smoke.csproj -c Release
 ```
 
-### Focused tests and security checks
+See `CLI_USAGE.md` for CLI commands and examples.
 
-From `ui/SonicUI`:
+## Browser extension
 
-```powershell
-npm run test:security
-npm run test:ip-security
-npm run test:e2e:smoke
-```
+The extension source and setup notes are under `ui/SonicUI/extension/` and `ui/SonicUI/docs/browser-extension.md`. Build the extension with `npm run build:extension` from `ui/SonicUI`, then follow the browser-specific manual loading steps. Browser security requires user approval; an extension build is not the same as an automatically installed extension. Verify the exact supported browser and installation flow against the current UI and documentation.
 
-The full Playwright suite is available with `npm run test:e2e`. Network-dependent tests may require a real, non-loopback LAN configuration; review test output for skipped tests before treating a run as complete. Release builds must also pass the repository's configured security and packaging gates.
+## Security, privacy, and release status
+
+- Keep Electron renderer isolation enabled and expose privileged operations only through the intended preload/IPC boundary.
+- Browser handoff is user-controlled; review extension permission prompts and privacy behavior before enabling capture.
+- The .NET CLI named pipe is intended for local control, not remote network access.
+- Preserve third-party copyright/license notices. Review `ui/SonicUI/THIRD_PARTY_NOTICES.md` and the dependency/security audit output before redistribution.
+- Verify installer signatures and hashes rather than describing a package as signed based only on its build output.
+- Do not treat a successful compile or a local test package as proof of production readiness. End-to-end browser validation, dependency/license gates, clean-profile install/upgrade/uninstall checks, and hardware-dependent network tests remain separate release checks.
 
 ## Documentation
 
-- [Product requirements](PRD.md)
-- [Implementation status](IMPLEMENTATION_STATUS.md)
+- [Product requirements and engineering decisions](PRD.md)
+- [Project memory and architecture map](PROJECT_MEMORY.md)
 - [CLI usage guide](CLI_USAGE.md)
 - [Project structure](docs/PROJECT_STRUCTURE.md)
-- [Browser extension documentation](ui/SonicUI/docs/browser-extension.md)
+- [Browser extension guide](ui/SonicUI/docs/browser-extension.md)
 - [Security policy](ui/SonicUI/SECURITY.md)
 - [Third-party notices](ui/SonicUI/THIRD_PARTY_NOTICES.md)
 
-## Security and release readiness
-
-Sonic includes dependency security checks, third-party license notices, and software bill of materials (SBOM) generation under `ui/SonicUI/scripts/`. Review their generated output as part of release preparation; a successful build alone does not prove every dependency advisory or licensing item is resolved.
-
-Windows Authenticode signing is a separate release step. Unsigned or newly signed installers may still trigger Microsoft Defender SmartScreen warnings until signing and reputation requirements are met. Do not describe an installer as signed unless its Authenticode signature has been verified.
-
 ## License and attribution
 
-Review [the UI license](ui/SonicUI/LICENSE) and [third-party notices](ui/SonicUI/THIRD_PARTY_NOTICES.md) before redistributing the application. Keep applicable upstream copyright and license text with redistributed code and dependencies.
+The repository root is licensed under the MIT License in `LICENSE`. The UI project also retains its license for its standalone packaging context. Preserve applicable upstream notices and review third-party licensing before redistributing builds.
