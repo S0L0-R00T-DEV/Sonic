@@ -38,6 +38,17 @@ jobs:
           }
           $certPath = Join-Path $env:RUNNER_TEMP 'sonic-signing.pfx'
           [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
+          # Trust the exact configured release signer in this ephemeral runner so the
+          # post-build Authenticode check validates the signature created by this workflow.
+          $signingCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certPath, $env:WINDOWS_CERTIFICATE_PASSWORD)
+          $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser')
+          $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+          try {
+            if (-not ($rootStore.Certificates | Where-Object { $_.Thumbprint -eq $signingCertificate.Thumbprint })) {
+              $rootStore.Add($signingCertificate)
+            }
+          } finally { $rootStore.Close() }
+          Write-Host "Configured CI trust for release signer thumbprint $($signingCertificate.Thumbprint)"
           "CSC_LINK=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CSC_KEY_PASSWORD=$env:WINDOWS_CERTIFICATE_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Pin update publisher key in the application

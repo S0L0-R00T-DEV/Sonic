@@ -133,7 +133,10 @@ $xpiPackage = Join-Path $releaseOutput 'win-unpacked\resources\browser-extension
 if (-not (Test-Path $xpiPackage)) { throw "Packaged Firefox XPI is missing: $xpiPackage" }
 if ($Release) {
   $signature = Get-AuthenticodeSignature -LiteralPath $installer
-  if ($signature.Status -ne 'Valid') { throw "Release installer signature is not valid: $($signature.Status)" }
+  if ($signature.Status -ne 'Valid') {
+    $signer = if ($signature.SignerCertificate) { "$($signature.SignerCertificate.Subject) [thumbprint $($signature.SignerCertificate.Thumbprint)]" } else { 'missing signer certificate' }
+    throw "Release installer signature is not valid: $($signature.Status). Details: $($signature.StatusMessage). Signer: $signer"
+  }
 }
 
 $cliZip = Join-Path $releaseOutput 'Sonic-CLI-win-x64.zip'
