@@ -46,6 +46,10 @@ import {
   verifySignedManifest
 } from './download/integrityVerification'
 import { checkForUpdate, downloadVerifiedUpdate, openVerifiedUpdate } from './updater'
+import {
+  UPDATE_PUBLISHER_KEY_FINGERPRINT,
+  UPDATE_PUBLISHER_PUBLIC_KEY_PEM
+} from './updateTrust.generated'
 import { redactDiagnosticReport } from './diagnosticReport'
 import { getRuntimeLogSnapshot } from './runtimeLog'
 import { NetworkMonitor } from './network/interfaces'
@@ -1080,16 +1084,24 @@ export async function registerSonicBridge(): Promise<void> {
     shell.showItemInFolder(item.destination)
     return true
   })
+  const updatePublisherPublicKeyPem =
+    UPDATE_PUBLISHER_PUBLIC_KEY_PEM || settings.publisherPublicKeyPem
+  const updatePublisherKeyFingerprint =
+    UPDATE_PUBLISHER_KEY_FINGERPRINT || settings.publisherKeyFingerprint
   handle(C.checkForUpdate, async (repository: string) =>
-    checkForUpdate(repository, settings.publisherPublicKeyPem, settings.publisherKeyFingerprint)
+    checkForUpdate(repository, updatePublisherPublicKeyPem, updatePublisherKeyFingerprint)
   )
   handle(C.downloadVerifiedUpdate, async (repository: string) => {
-    if (!settings.publisherPublicKeyPem || !settings.publisherKeyFingerprint)
-      throw new Error('Pin the publisher Ed25519 key and independently verified fingerprint first.')
+    if (!updatePublisherPublicKeyPem || !updatePublisherKeyFingerprint)
+      throw new Error('This development build has no pinned update publisher key. Signed release builds embed the trusted key automatically.')
     return downloadVerifiedUpdate(
       repository,
-      settings.publisherPublicKeyPem,
-      settings.publisherKeyFingerprint
+      updatePublisherPublicKeyPem,
+      updatePublisherKeyFingerprint,
+      (progress) => {
+        const window = BrowserWindow.getAllWindows().find((candidate) => !candidate.isDestroyed())
+        if (window) window.webContents.send(C.updateDownloadProgress, progress)
+      }
     )
   })
   handle(C.openVerifiedUpdate, async (operationId: string) => openVerifiedUpdate(operationId))

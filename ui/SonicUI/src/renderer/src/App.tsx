@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { DownloadActionsProvider } from './components/DownloadActionsProvider'
 import { LimitsDialog } from './components/LimitsDialog'
+import { AboutDialog } from './components/AboutDialog'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
 import { StatusBar } from './components/StatusBar'
@@ -98,6 +99,15 @@ function App(): React.JSX.Element {
   })
   const [recoveryIssues, setRecoveryIssues] = useState<RecoveryIssue[]>([])
   const [settingsPage, setSettingsPage] = useState<string | null>(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
+  const [updateNotificationVersion, setUpdateNotificationVersion] = useState<string | null>(null)
+  useEffect(() => window.sonic.onUpdateDetected(setUpdateNotificationVersion), [])
+  useEffect(() => {
+    return window.sonic.onUpdateAvailable((version) => {
+      setUpdateNotificationVersion(version)
+      setAboutOpen(true)
+    })
+  }, [])
   useEffect(() => {
     if (!settingsOpen) return
     try {
@@ -155,7 +165,11 @@ function App(): React.JSX.Element {
       <TooltipProvider>
         <DownloadActionsProvider>
           <div className="flex h-full flex-col">
-            <TitleBar onOpenSettings={() => setSettingsOpen(true)} />
+            <TitleBar
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenAbout={() => setAboutOpen(true)}
+              updateAvailable={Boolean(updateNotificationVersion)}
+            />
             <RecoveryIssuesBanner issues={recoveryIssues} />
             <div className="min-h-0 flex-1">
               <CurrentScreen />
@@ -168,6 +182,11 @@ function App(): React.JSX.Element {
               onOpenChange={setSettingsOpen}
               page={settingsPage}
               onPageChange={setSettingsPage}
+            />
+            <AboutDialog
+              open={aboutOpen}
+              onOpenChange={setAboutOpen}
+              updateNotificationVersion={updateNotificationVersion}
             />
           </div>
         </DownloadActionsProvider>

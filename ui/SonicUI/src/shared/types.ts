@@ -11,6 +11,13 @@ export interface NetworkAddress {
 
 export type ThemeSource = 'sonic' | 'light' | 'dark'
 
+export type UpdateDownloadProgress = {
+  bytesDownloaded: number
+  totalBytes: number
+  percent: number
+  phase: 'downloading' | 'verifying' | 'starting-installer'
+}
+
 export type RemoteControlScope = 'status:read' | 'task:add' | 'task:control'
 export interface RemoteControlState {
   enabled: boolean
