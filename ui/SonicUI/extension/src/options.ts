@@ -41,10 +41,10 @@ async function renderConnection(): Promise<void> {
   element('dot').className = `dot ${reached === 'ok' ? 'ok' : reached === 'update' ? 'warn' : ''}`
   element('connection').textContent =
     reached === 'ok'
-      ? 'Connected to Speed-o-Freq Sonic'
+      ? 'Connected to Sonic'
       : reached === 'update'
-        ? 'Update Speed-o-Freq Sonic to use this extension'
-        : 'Speed-o-Freq Sonic isn’t open'
+        ? 'Update Sonic to use this extension'
+        : 'Sonic isn’t open'
   element('open-sonic').hidden = reached !== 'closed'
   const port = sonicPort()
   element('port').textContent = port === null ? '' : `127.0.0.1:${port}`

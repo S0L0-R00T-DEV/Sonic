@@ -315,10 +315,10 @@ const MOBILE_CLIENT = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#111318"><title>Sonic Companion</title>
 <style>
 :root{color-scheme:dark;font:16px system-ui,sans-serif;background:#111318;color:#f5f5f5}*{box-sizing:border-box}body{margin:0 auto;padding:20px 16px 48px;max-width:720px}h1{font-size:1.55rem;margin:.4rem 0}p{color:#b8beca;line-height:1.5}.panel,article{border:1px solid #363b45;border-radius:14px;padding:16px;margin:14px 0;background:#191c23}label{display:block;font-size:.9rem;margin:12px 0 6px}input{width:100%;min-height:44px;padding:10px;border-radius:8px;border:1px solid #505866;background:#0e1015;color:white;font:inherit}button{min-height:42px;border:0;border-radius:9px;padding:10px 14px;background:#d8e0ff;color:#151a2a;font-weight:650;margin:6px 6px 0 0}button.secondary{background:#303642;color:#f5f5f5}button.danger{background:#632e35;color:white}.row{display:flex;gap:8px;flex-wrap:wrap}.row button{flex:1}.muted{font-size:.85rem;color:#a9b0bd}.hidden{display:none!important}.status{display:inline-block;border:1px solid #4a5260;border-radius:20px;padding:3px 9px;font-size:.78rem}.bar{height:6px;border-radius:8px;background:#333946;overflow:hidden;margin:8px 0}.bar span{display:block;height:100%;background:#a9c0ff}.name{font-weight:650;overflow-wrap:anywhere}.meta{font-size:.85rem;color:#b8beca;margin-top:5px}.notice{color:#ffcf8a;white-space:pre-wrap}.ok{color:#a4e5bd}button:focus-visible,input:focus-visible{outline:3px solid #a9c0ff;outline-offset:2px}
-</style></head><body><h1>Speed-o'-Freq Sonic</h1><p>Companion control · same local Wi-Fi only</p>
+</style></head><body><h1>Sonic</h1><p>Companion control · same local Wi-Fi only</p>
 <section id="pairPanel" class="panel"><h2>Pair this phone</h2><p>Enter the short-lived code shown in Sonic on your computer. Pairing codes expire after three minutes and can be used once.</p><form id="pairForm"><label for="code">Pairing code</label><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required><label for="device">Phone name</label><input id="device" maxlength="64" autocomplete="nickname" value="My phone" required><button type="submit">Pair phone</button></form></section>
 <section id="mainPanel" class="hidden"><div class="panel"><div class="row"><button id="refresh">Refresh status</button><button id="forget" class="secondary">Forget this phone</button></div><p id="message" role="status" aria-live="polite"></p></div>
-<div class="panel"><h2>Add a download</h2><form id="addForm"><label for="url">HTTP(S) or magnet link</label><input id="url" type="url" placeholder="https://example.com/file.zip" required><button type="submit">Add download</button></form></div>
+<div class="panel"><h2>Add a download</h2><form id="addForm"><label for="url">HTTP(S) or magnet link</label><input id="url" type="text" inputmode="url" autocomplete="url" autocapitalize="off" spellcheck="false" placeholder="https://example.com/file.zip or magnet:??" required><button type="submit">Add download</button></form></div>
 <h2>Downloads</h2><div id="downloads"></div></section>
 <script>
 const $=id=>document.getElementById(id);let token=localStorage.getItem('sonic-companion-token')||'';let busy=false;
@@ -330,7 +330,7 @@ function bytes(n){if(!Number.isFinite(n)||n<=0)return '0 B';const u=['B','KB','M
 function esc(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function refresh(){if(!token)return;try{const data=await api('/api/status');$('downloads').innerHTML='';for(const item of data.downloads){const card=document.createElement('article');const p=Math.max(0,Math.min(100,Number(item.progressPercent)||0));card.innerHTML='<div class="name">'+esc(item.name)+'</div><div class="meta"><span class="status">'+esc(item.status)+'</span> · '+bytes(item.bytesDownloaded)+' / '+(item.totalBytes?bytes(item.totalBytes):'unknown size')+'</div><div class="bar"><span style="width:'+p+'%"></span></div><div class="meta">'+p.toFixed(1)+'% · '+bytes(item.speedBytesPerSec)+'/s</div><div class="row"><button data-action="pause">Pause</button><button data-action="resume" class="secondary">Resume</button><button data-action="cancel" class="danger">Cancel</button></div>';for(const button of card.querySelectorAll('button')){button.addEventListener('click',()=>{if(button.dataset.action==='cancel'&&!confirm('Cancel this download?'))return;act(item.id,button.dataset.action,button)})} $('downloads').append(card)}if(!data.downloads.length)$('downloads').innerHTML='<article>No downloads yet.</article>';showMessage('Connected to Sonic.',true)}catch(err){showMessage(err.message);if(/credential|authoriz|revok/i.test(err.message)){token='';localStorage.removeItem('sonic-companion-token');showPaired()}}}
 async function act(id,action,button){if(busy)return;busy=true;button.disabled=true;try{await api('/api/tasks/'+encodeURIComponent(id)+'/action',{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({action})});await refresh()}catch(err){showMessage(err.message)}finally{busy=false;button.disabled=false}}
-$('addForm').addEventListener('submit',async e=>{e.preventDefault();try{const url=$('url').value.trim();await api('/api/tasks',{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({url})});$('url').value='';showMessage('Download added.',true);await refresh()}catch(err){showMessage(err.message)}});
+$('addForm').addEventListener('submit',async e=>{e.preventDefault();try{const url=$('url').value.trim();if(!(url.toLowerCase().startsWith('http://')||url.toLowerCase().startsWith('https://')||url.toLowerCase().startsWith('magnet:?'))){showMessage('Enter an HTTP(S) or magnet link.');return}await api('/api/tasks',{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({url})});$('url').value='';showMessage('Download added.',true);await refresh()}catch(err){showMessage(err.message)}});
 $('refresh').addEventListener('click',refresh);$('forget').addEventListener('click',()=>{token='';localStorage.removeItem('sonic-companion-token');showPaired()});showPaired();
 </script></body></html>`
 
@@ -415,19 +415,16 @@ export async function enableRemoteControl(
   secureStorageAvailable()
   const current = await loadConfig()
   if (!current.ca) {
-    const ca = await generate(
-      [{ name: 'commonName', value: "Speed-o'-Freq Sonic Local Wi-Fi CA" }],
-      {
-        keyType: 'ec',
-        curve: 'P-256',
-        algorithm: 'sha256',
-        notAfterDate: new Date(Date.now() + 5 * 365 * 24 * 60 * 60_000),
-        extensions: [
-          { name: 'basicConstraints', cA: true, pathLenConstraint: 0, critical: true },
-          { name: 'keyUsage', keyCertSign: true, cRLSign: true, critical: true }
-        ]
-      }
-    )
+    const ca = await generate([{ name: 'commonName', value: 'Sonic Local Wi-Fi CA' }], {
+      keyType: 'ec',
+      curve: 'P-256',
+      algorithm: 'sha256',
+      notAfterDate: new Date(Date.now() + 5 * 365 * 24 * 60 * 60_000),
+      extensions: [
+        { name: 'basicConstraints', cA: true, pathLenConstraint: 0, critical: true },
+        { name: 'keyUsage', keyCertSign: true, cRLSign: true, critical: true }
+      ]
+    })
     current.ca = {
       privateKey: ca.private,
       certificate: ca.cert,
@@ -524,7 +521,7 @@ export async function enableRemoteControl(
           const items = Array.isArray(result) ? result : []
           record('status-read', credential.id)
           return send(res, 200, {
-            application: "Speed-o'-Freq Sonic",
+            application: 'Sonic',
             downloads: items.map(publicTask).filter((item) => item.id)
           })
         }

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { ClipboardCopy } from 'lucide-react'
+import { ContextHelp } from './ContextHelp'
 import { Button } from './ui/button'
 import { Alert, AlertDescription } from './ui/alert'
 import type { RemoteControlScope, RemoteControlState } from '@shared/types'
@@ -26,6 +28,7 @@ export function RemoteControlSettings(): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [copiedUrl, setCopiedUrl] = useState(false)
 
   const refresh = async (): Promise<void> => {
     const next = await window.sonic.remoteControlState()
@@ -90,7 +93,21 @@ export function RemoteControlSettings(): React.JSX.Element {
   return (
     <section className="flex flex-col gap-3 border-t-[0.5px] border-border py-3">
       <div>
-        <h3 className="font-sans text-[14px] font-semibold">Local Wi-Fi remote control</h3>
+        <div className="flex items-center gap-1">
+          <h3 className="font-sans text-[14px] font-semibold">Local Wi-Fi remote control</h3>
+          <ContextHelp title="Local Wi-Fi remote control">
+            <p>
+              Control Sonic from a phone connected to the same Wi-Fi network. Sonic listens only on
+              the selected private Wi-Fi IPv4 address, not on the public internet.
+            </p>
+            <p>
+              Enable the listener, export Sonic’s trust certificate, install it on the phone, open
+              the HTTPS connection URL, then generate a one-time pairing code. Pairing codes expire
+              after 3 minutes and can be used once.
+            </p>
+            <p>Only pair devices you trust. Disable the listener when you are finished.</p>
+          </ContextHelp>
+        </div>
         <p className="mt-1 text-[12.5px] leading-snug text-[var(--text-secondary)]">
           Control Sonic from a phone on the same Wi-Fi subnet. The server binds only to the chosen
           Wi-Fi IPv4 address and rejects clients outside that subnet. No cloud relay, internet
@@ -99,9 +116,17 @@ export function RemoteControlSettings(): React.JSX.Element {
       </div>
       {!state?.enabled && (
         <div className="flex flex-col gap-2">
-          <label htmlFor="remote-wifi" className="text-sm font-medium">
-            Wi-Fi interface
-          </label>
+          <div className="flex items-center gap-1">
+            <label htmlFor="remote-wifi" className="text-sm font-medium">
+              Wi-Fi interface
+            </label>
+            <ContextHelp title="Wi-Fi interface">
+              <p>
+                Select the active Wi-Fi adapter that shares a subnet with your phone. Ethernet, USB,
+                bridge, and public interfaces are intentionally excluded.
+              </p>
+            </ContextHelp>
+          </div>
           <select
             id="remote-wifi"
             value={interfaceId}
@@ -128,8 +153,37 @@ export function RemoteControlSettings(): React.JSX.Element {
       )}
       {state?.enabled && (
         <div className="rounded-lg border border-border p-3">
-          <p className="text-sm font-medium">HTTPS listener active</p>
-          <p className="mt-1 break-all font-mono text-xs">{state.url}</p>
+          <div className="flex items-center gap-1">
+            <p className="text-sm font-medium">HTTPS listener active</p>
+            <ContextHelp title="HTTPS connection URL">
+              <p>
+                Copy this exact HTTPS URL into the phone browser while it is connected to the same
+                Wi-Fi. Keep the port unchanged. If the browser does not trust the certificate,
+                install the certificate exported by Sonic first.
+              </p>
+            </ContextHelp>
+          </div>
+          <div className="mt-1 flex items-start gap-2">
+            <p className="min-w-0 flex-1 break-all font-mono text-xs">{state.url}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy || !state.url}
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(state.url ?? '')
+                  .then(() => {
+                    setCopiedUrl(true)
+                    setMessage('HTTPS connection URL copied to clipboard.')
+                  })
+                  .catch(() => setError('Could not copy the URL. Select and copy it manually.'))
+              }}
+            >
+              <ClipboardCopy data-icon="inline-start" className="size-3.5" />
+              {copiedUrl ? 'Copied' : 'Copy URL'}
+            </Button>
+          </div>
           <p className="mt-2 text-xs text-muted-foreground">
             Open this exact address on the phone while it is connected to the same Wi-Fi.
           </p>
@@ -165,7 +219,19 @@ export function RemoteControlSettings(): React.JSX.Element {
         </div>
       )}
       <div className="rounded-lg border border-border p-3">
-        <p className="text-sm font-medium">Pair a phone</p>
+        <div className="flex items-center gap-1">
+          <p className="text-sm font-medium">Pair a phone</p>
+          <ContextHelp title="Pair a phone">
+            <p>
+              After opening the HTTPS URL on the phone, generate a one-time code here and enter it
+              on the phone page. The code expires in 3 minutes, is single-use, and grants only the
+              permissions selected below.
+            </p>
+            <p>
+              Use the minimum permissions required. Revoke any paired phone you no longer trust.
+            </p>
+          </ContextHelp>
+        </div>
         <p className="mt-1 text-xs text-muted-foreground">
           Choose the minimum permissions for this device. The pairing code expires in 3 minutes, is
           single-use and is not saved to disk.
@@ -185,10 +251,20 @@ export function RemoteControlSettings(): React.JSX.Element {
                   )
                 }}
               />
-              <span>
+              <span className="min-w-0 flex-1">
                 <span className="font-medium">{scope.label}</span>
                 <span className="block text-xs text-muted-foreground">{scope.description}</span>
               </span>
+              <ContextHelp title={scope.label}>
+                <p>{scope.description}</p>
+                <p>
+                  {scope.id === 'status:read'
+                    ? 'Allows this phone to view download names, status, progress, and speed. It does not allow changing tasks.'
+                    : scope.id === 'task:add'
+                      ? 'Allows this phone to submit HTTP(S) and magnet links to Sonic. Only enable this if you want the phone to add downloads.'
+                      : 'Allows this phone to pause, resume, or cancel downloads. Only enable this if the phone should control existing tasks.'}
+                </p>
+              </ContextHelp>
             </label>
           ))}
         </div>
@@ -214,7 +290,15 @@ export function RemoteControlSettings(): React.JSX.Element {
         )}
       </div>
       <div className="rounded-lg border border-border p-3">
-        <p className="text-sm font-medium">Paired devices</p>
+        <div className="flex items-center gap-1">
+          <p className="text-sm font-medium">Paired devices</p>
+          <ContextHelp title="Paired devices">
+            <p>
+              These are phones that completed pairing. Revoke a device to invalidate its access
+              token immediately.
+            </p>
+          </ContextHelp>
+        </div>
         {(state?.devices ?? []).filter((device) => !device.revoked).length === 0 ? (
           <p className="mt-1 text-xs text-muted-foreground">No active paired phones.</p>
         ) : (
@@ -254,7 +338,15 @@ export function RemoteControlSettings(): React.JSX.Element {
         )}
       </div>
       <div className="rounded-lg border border-border p-3">
-        <p className="text-sm font-medium">Recent remote activity</p>
+        <div className="flex items-center gap-1">
+          <p className="text-sm font-medium">Recent remote activity</p>
+          <ContextHelp title="Remote activity log">
+            <p>
+              This short in-memory log records recent remote requests and pairing activity for
+              troubleshooting. It is not a permanent audit archive.
+            </p>
+          </ContextHelp>
+        </div>
         {(state?.auditEvents ?? []).length === 0 ? (
           <p className="mt-1 text-xs text-muted-foreground">
             No remote-control requests recorded in this session.

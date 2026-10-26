@@ -248,6 +248,12 @@ export async function probeUrl(rawUrl: string, browser?: BrowserContext): Promis
   }
 
   const contentType = headerValue(response.headers, 'content-type') ?? ''
+  const contentDisposition = headerValue(response.headers, 'content-disposition') ?? ''
+  if (/^text\/html\b/i.test(contentType) && !/\battachment\b/i.test(contentDisposition)) {
+    throw new Error(
+      'This URL returned a webpage, not a direct file. Open the page in your browser, complete any required steps, click its actual download button, then copy the final file URL into Sonic. Pages that require JavaScript, sign-in, or a CAPTCHA cannot be resolved from a pasted page URL alone.'
+    )
+  }
   if (
     /\.(?:metalink|meta4)$/i.test(current.pathname) ||
     /application\/(?:metalink4\+xml|metalink\+xml)/i.test(contentType)

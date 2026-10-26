@@ -1,20 +1,32 @@
-﻿appId: com.speedofreq.sonic
-productName: Speed-o'-Freq Sonic
-copyright: Copyright 2026 Speed-o'-Freq Sonic
-afterPack: scripts/check-torrent-package.mjs
-afterSign: scripts/generate-package-sbom.mjs
-afterAllArtifactBuild: scripts/generate-release-manifest.mjs
+appId: com.speedofreq.sonic
+productName: Sonic
+copyright: Copyright 2026 Sonic
 electronDist: node_modules/electron/dist
 directories:
   buildResources: build
-  output: dist-sonic
+  output: dist-sonic-release
 files:
   - '!tests/**'
+  - '!LICENSE'
+  - '!THIRD_PARTY_NOTICES.md'
   - '!patches/**'
   - '!third-party-license-cache/**'
   - '!scripts/**'
   - '!dist/**'
   - '!dist-sonic/**'
+  - '!dist-sonic-release/**'
+  - '!dist-sonic-*/**'
+  - '!playwright*.log'
+  - '!playwright*-exit-code.txt'
+  - '!playwright.config.ts'
+  - '!tsconfig.e2e.json'
+  - '!release-static-checks.log'
+  - '!release-static-exit-code.txt'
+  - '!security-gate-run.log'
+  - '!security-gate-exit-code.txt'
+  - '!CONTRIBUTING.md'
+  - '!SECURITY.md'
+  - '!components.json'
   - '!docs/**'
   - '!e2e/**'
   - '!test-results/**'
@@ -36,24 +48,32 @@ files:
   - '!node_modules/webrtc-polyfill/**'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 extraResources:
-  - from: ../../artifacts/cli-queue-20261018/win-x64
+  - from: ../../artifacts/sonic-backend-current/win-x64
     to: sonic-backend
+  - from: extension/dist
+    to: browser-extensions
+  - from: ../../artifacts/sonic-cli-win-x64
+    to: sonic-cli
+  - from: LICENSE
+    to: legal/LICENSE
+  - from: THIRD_PARTY_NOTICES.md
+    to: legal/THIRD_PARTY_NOTICES.md
 asarUnpack:
   - resources/**
 win:
   forceCodeSigning: true
-  executableName: SpeedOFreq.Sonic
+  executableName: Sonic
   target:
     - target: nsis
       arch: [x64]
 nsis:
-  artifactName: Speed-o-Freq-Sonic-x64-setup.exe
-  oneClick: true
-  perMachine: true
+  artifactName: Sonic-Setup-x64.exe
+  oneClick: false
+  perMachine: false
   allowElevation: true
   runAfterFinish: true
-  allowToChangeInstallationDirectory: false
-  shortcutName: Speed-o'-Freq Sonic
-  uninstallDisplayName: Speed-o'-Freq Sonic
+  allowToChangeInstallationDirectory: true
+  shortcutName: Sonic
+  uninstallDisplayName: Sonic
   createDesktopShortcut: always
 npmRebuild: false

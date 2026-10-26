@@ -33,7 +33,7 @@ async function render(): Promise<void> {
 
   element<HTMLInputElement>('capture').checked = settings.capture
   element('capture-hint').textContent = settings.capture
-    ? 'Downloads open in Sonic instead of the browser.'
+    ? 'Supported direct downloads go to Sonic; failed handoffs stay in the browser.'
     : 'Downloads stay in the browser.'
 
   element('site-row').hidden = host === null

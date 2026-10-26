@@ -6,6 +6,7 @@ import { directoryListingLinks } from '../utils/batchLinks'
 import { useAppStore } from '../store/useAppStore'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
+import { ContextHelp } from './ContextHelp'
 import { Textarea } from './ui/textarea'
 import { Checkbox } from './ui/checkbox'
 import { useLocale } from '../i18n'
@@ -502,9 +503,27 @@ export function BatchImportDialog({
             <ListPlus className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <DialogTitle className="text-base font-semibold">
-              {t('Import multiple downloads')}
-            </DialogTitle>
+            <div className="flex items-center gap-1">
+              <DialogTitle className="text-base font-semibold">
+                {t('Import multiple downloads')}
+              </DialogTitle>
+              <ContextHelp title="Import multiple downloads">
+                <p>
+                  Paste several direct links, magnet links, or text containing links, or load a
+                  link-list file. Relative links from copied directory listings need a base URL on
+                  the same website origin.
+                </p>
+                <p>
+                  Choose a destination, preview the links, review each result, unselect anything you
+                  do not want, then add the selected items to the queue. Preview checks links
+                  without starting downloads.
+                </p>
+                <p>
+                  Unsupported entries and duplicates are reported. Failed checks can be retried.
+                  Sonic limits each batch to 100 unique links.
+                </p>
+              </ContextHelp>
+            </div>
             <DialogDescription className="mt-1">
               {t(
                 'Paste a link manifest or copied HTML directory listing, or load a text file. Supports HTTP(S), magnet links and local .torrent paths. Relative listing links require a base URL and are restricted to that origin; folders are not crawled. Review items before queueing.'

@@ -319,14 +319,6 @@
   }
 }
 
-:root[lang='ur'] body,
-:root[lang='ur'] button,
-:root[lang='ur'] input,
-:root[lang='ur'] select,
-:root[lang='ur'] textarea {
-  font-family: 'Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Segoe UI', sans-serif;
-}
-
 @media (forced-colors: active) {
   :where(
     button,

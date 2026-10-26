@@ -64,8 +64,46 @@ function createBom(bom, appOutDir, inventory, electronVersion, backendPath) {
   const productionRefs = (bom.dependencies ?? []).find((d) => d.ref === oldRoot)?.dependsOn ?? []
   const electronRef = 'pkg:npm/electron@' + electronVersion
   const backendRef = 'pkg:generic/speed-ofreq-sonic-backend'
+  // npm's CycloneDX output currently omits npm-alias packages from components/dependency edges.
+  // Explicitly add the security-critical transitive alias used by bittorrent-tracker.
+  const aliasedIp = lock.packages?.['node_modules/ip']
+  const aliasedIpRef =
+    aliasedIp?.name === '@bybrave/ip2' && aliasedIp.version
+      ? 'pkg:npm/%40bybrave/ip2@' + aliasedIp.version
+      : null
   const existing = new Set(bom.components.map(componentRef))
   bom.components = bom.components.filter((c) => componentRef(c) !== appRef)
+  if (aliasedIpRef && aliasedIp && !existing.has(aliasedIpRef)) {
+    const component = {
+      type: 'library',
+      name: aliasedIp.name,
+      version: aliasedIp.version,
+      'bom-ref': aliasedIpRef,
+      purl: aliasedIpRef,
+      scope: 'required',
+      licenses: aliasedIp.license ? [{ license: { id: aliasedIp.license } }] : [],
+      externalReferences: aliasedIp.resolved
+        ? [{ type: 'distribution', url: aliasedIp.resolved }]
+        : [],
+      properties: [
+        {
+          name: 'sonic:dependency-alias',
+          value: 'Installed as node_modules/ip for the bittorrent-tracker dependency'
+        }
+      ]
+    }
+    const integrity = aliasedIp.integrity?.match(/^sha512-(.+)$/)
+    if (integrity) {
+      component.hashes = [
+        {
+          alg: 'SHA-512',
+          content: Buffer.from(integrity[1], 'base64').toString('hex')
+        }
+      ]
+    }
+    bom.components.push(component)
+    existing.add(aliasedIpRef)
+  }
   bom.metadata = bom.metadata ?? {}
   bom.metadata.component = {
     type: 'application',
@@ -139,6 +177,22 @@ function createBom(bom, appOutDir, inventory, electronVersion, backendPath) {
     ])
   ]
   bom.dependencies = (bom.dependencies ?? []).filter((d) => d.ref !== oldRoot && d.ref !== appRef)
+  if (aliasedIpRef) {
+    const trackerComponent = bom.components.find(
+      (component) => component.name === 'bittorrent-tracker'
+    )
+    const trackerDependency = bom.dependencies.find(
+      (dependency) => dependency.ref === componentRef(trackerComponent ?? {})
+    )
+    if (trackerDependency) {
+      trackerDependency.dependsOn = [
+        ...new Set([...(trackerDependency.dependsOn ?? []), aliasedIpRef])
+      ]
+    }
+    if (!bom.dependencies.some((dependency) => dependency.ref === aliasedIpRef)) {
+      bom.dependencies.push({ ref: aliasedIpRef, dependsOn: [] })
+    }
+  }
   bom.dependencies.push({
     ref: appRef,
     dependsOn: dependsOn.filter((ref) => refs.has(ref) || ref.startsWith('file:'))

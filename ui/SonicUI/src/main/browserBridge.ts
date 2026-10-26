@@ -38,6 +38,25 @@ let listeningOn: number | null = null
 let activeProbes = 0
 const handoffs = new Map<string, Offer>()
 let extensionUsed = false
+let lastExtensionPingAt = 0
+
+/** Reports a recent, real request from a browser-extension origin, not just a running bridge. */
+export function getExtensionConnectionStatus(): { connected: boolean; message: string } {
+  if (listeningOn === null) {
+    return {
+      connected: false,
+      message: 'Sonic’s browser bridge is not running. Restart Sonic and try again.'
+    }
+  }
+  if (Date.now() - lastExtensionPingAt < 90_000) {
+    return { connected: true, message: 'Connected: a Sonic browser extension checked in recently.' }
+  }
+  return {
+    connected: false,
+    message:
+      'Not connected. Enable the Sonic extension in your browser, keep Sonic running, then check again.'
+  }
+}
 
 /** Once an extension has connected, closing the window keeps Sonic in the tray, where the
  * browser can still reach it. */
@@ -48,7 +67,10 @@ export function keepsRunningForBrowser(): boolean {
 export async function startBridge(bridgeHost: BridgeHost): Promise<void> {
   host = bridgeHost
   extensionUsed = (await loadSettings()).browserExtensionUsed === true
-  for (const port of BRIDGE_PORTS) {
+  const testPort = !app.isPackaged ? Number(process.env.SONIC_E2E_BRIDGE_PORT) : NaN
+  const ports =
+    Number.isInteger(testPort) && testPort >= 1024 && testPort <= 65535 ? [testPort] : BRIDGE_PORTS
+  for (const port of ports) {
     const server = createServer(
       (req, res) => void handle(req, res, port).catch(() => end(res, 500))
     )
@@ -66,9 +88,7 @@ export async function startBridge(bridgeHost: BridgeHost): Promise<void> {
       return
     }
   }
-  console.error(
-    `[Speed-o-Freq Sonic] browser bridge: ports ${BRIDGE_PORTS.join(', ')} are all taken`
-  )
+  console.error(`[Sonic] browser bridge: ports ${BRIDGE_PORTS.join(', ')} are all taken`)
 }
 
 function end(res: ServerResponse, code: number, headers: Record<string, string> = {}): void {
@@ -113,7 +133,10 @@ async function handle(req: IncomingMessage, res: ServerResponse, port: number): 
     return end(res, 415, cors)
   }
   if (req.method === 'GET' && path === '/ping') {
-    noteExtension()
+    if (origin && EXTENSION_ORIGIN.test(origin)) {
+      lastExtensionPingAt = Date.now()
+      noteExtension()
+    }
     return json(res, 200, cors, {
       app: 'sonic',
       version: app.getVersion(),

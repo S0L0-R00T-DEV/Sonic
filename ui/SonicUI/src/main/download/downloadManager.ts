@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { copyFile, readFile, readdir, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { basename, join, sep } from 'node:path'
 import type { BrowserWindow } from 'electron'
-import { app, Notification, powerSaveBlocker, safeStorage, shell } from 'electron'
+import { app, powerSaveBlocker, safeStorage, shell } from 'electron'
+import { showCompletionToast } from '../completionNotification'
 import { scheduleWindow } from '../../shared/downloadSchedule'
 import { IpcChannels } from '../../shared/ipc-channels'
 import {
@@ -37,7 +38,7 @@ import {
 } from '../../shared/types'
 import { Limits } from '../network/limits'
 import { loadSettings } from '../settings'
-import { addToHistory, findInHistory, removeFromHistory } from './history'
+import { addToHistory, findInHistory, markHistoryRemoved, removeFromHistory } from './history'
 import { hashCompletedOutput } from './outputHash'
 import { testKnobs } from '../testKnobs'
 import { DownloadFile } from './downloadFile'
@@ -93,7 +94,7 @@ interface RuntimeFields {
   removed: boolean
   /** Updates sent to the window so far (see DownloadUpdate). */
   sentUpdates: number
-  /** Each block as the window was last sent it, by index â€” what tells a changed block apart. */
+  /** Each block as the window was last sent it, by index — what tells a changed block apart. */
   sentUnits: (Pick<DownloadUnitState, 'status' | 'interfaceId' | 'bytesDownloaded'> & {
     provisionalBytes?: number
   })[]
@@ -257,7 +258,7 @@ function samplePeak(runtime: DownloadRuntime, now: number): void {
   if (now - first.time < PEAK_SECONDS * 1000) return
   const held = (state.bytesDownloaded - first.bytes) / ((now - first.time) / 1000)
   // Stretches are only read where a reading falls, so the download's first or last few seconds
-  // can go unread as one â€” and when those were its fastest, every stretch read is slower than the
+  // can go unread as one — and when those were its fastest, every stretch read is slower than the
   // average. Its best 5 seconds can't be, though: past PEAK_SECONDS of downloading, the average
   // (as AVG works it out) is a floor the peak truly clears.
   const downloading = (now - state.startedAt - (state.totalPausedMs ?? 0)) / 1000
@@ -414,7 +415,7 @@ function formatGigabytes(bytes: number): string {
 
 /** The staging file is on the destination volume and becomes the final file by rename. */
 async function ensureDiskSpace(destinationDir: string, requiredBytes: number): Promise<void> {
-  if (requiredBytes <= 0) return // unknown size â€” nothing to check against
+  if (requiredBytes <= 0) return // unknown size — nothing to check against
   const stats = await statfs(destinationDir)
   const availableBytes = stats.bavail * stats.bsize
   if (availableBytes < requiredBytes) {
@@ -527,6 +528,8 @@ export class DownloadManager {
     const enrollmentChanged: DownloadRuntime[] = []
     const scheduled = this.downloadSchedule?.enabled || undefined
     for (const runtime of this.runtimes.values()) {
+      // Global speed limits live in Limits. Per-task receive and upload caps are explicit user
+      // choices stored in each manifest, so loading settings must not erase either one.
       if (
         (runtime.state.status === 'queued' || runtime.state.status === 'downloading') &&
         runtime.state.scheduled !== scheduled
@@ -570,7 +573,7 @@ export class DownloadManager {
     this.scheduleTimer = setTimeout(
       () => {
         void this.refreshSchedule()
-          .catch((error) => console.error('[Speed-o-Freq Sonic] schedule', error))
+          .catch((error) => console.error('[Sonic] schedule', error))
           .finally(() => this.armScheduleTimer())
       },
       boundary ? Math.max(1, Math.min(1000, boundary - now)) : 1000
@@ -788,7 +791,7 @@ export class DownloadManager {
   private noteRecoveryIssue(id: string, message: string): void {
     const issue = { id, message, manifestPath: this.manifestPath(id) }
     this.recoveryIssuesById.set(id, issue)
-    console.warn(`[Speed-o'-Freq Sonic] Saved download ${id} needs recovery: ${message}`)
+    console.warn(`[Sonic] Saved download ${id} needs recovery: ${message}`)
   }
 
   listRecoveryIssues(): { id: string; message: string; manifestPath: string }[] {
@@ -889,9 +892,7 @@ export class DownloadManager {
           if (runtime) {
             restored.push(runtime)
             if (loadedFromTemporary) {
-              console.info(
-                `[Speed-o'-Freq Sonic] Recovered download ${id} from its temporary checkpoint.`
-              )
+              console.info(`[Sonic] Recovered download ${id} from its temporary checkpoint.`)
             }
           } else {
             this.noteRecoveryIssue(
@@ -1011,7 +1012,7 @@ export class DownloadManager {
     this.historyChanged()
   }
 
-  /** A saved download as this version writes it, restored paused â€” or null when it never can
+  /** A saved download as this version writes it, restored paused — or null when it never can
    * be: its progress doesn't fit its plan, or a torrent's .torrent is gone. */
   private async restoreOne(
     id: string,
@@ -1207,8 +1208,8 @@ export class DownloadManager {
     }
     if (requestPayload.kind === 'http' && requestPayload.mirrorUrls?.length) {
       if (requestPayload.mediaStream) throw new Error('Media streams do not support mirror URLs.')
-      if (requestPayload.mirrorUrls.length > 4)
-        throw new Error('Add no more than four alternate mirrors.')
+      if (requestPayload.mirrorUrls.length > 5)
+        throw new Error('Add no more than five alternate mirrors.')
       const strongEtag = requestPayload.etag
       const checksumTrusted = Boolean(requestPayload.expectedSha256)
       if ((!strongEtag || /^W\//i.test(strongEtag)) && !checksumTrusted) {
@@ -1249,7 +1250,7 @@ export class DownloadManager {
     }
     if (requestPayload.kind === 'http' && requestPayload.browser !== undefined) {
       const browser = browserContextFrom(requestPayload.browser)
-      if (!browser) throw new Error('The browserâ€™s details for this download couldnâ€™t be read.')
+      if (!browser) throw new Error('The browser’s details for this download couldn’t be read.')
       requestPayload = { ...requestPayload, browser }
     }
 
@@ -1489,7 +1490,7 @@ export class DownloadManager {
       )
     }
     if (runtime.state.resumable === false) {
-      throw new Error('This download canâ€™t resume. Start it again.')
+      throw new Error('This download can’t resume. Start it again.')
     }
     if (!replaceable()) throw new Error('Pause the download before replacing its link.')
     if (this.relinking.has(id)) throw new Error('A new link for this download is being checked.')
@@ -1511,7 +1512,7 @@ export class DownloadManager {
     // unless the browser sent a new one.
     const browser = given?.browser ?? runtime.requestPayload.browser
     const probe = given?.probe ?? (await probeUrl(url, browser))
-    if (probe.kind !== 'http') throw new Error('That isnâ€™t a link to a file')
+    if (probe.kind !== 'http') throw new Error('That isn’t a link to a file')
     const { totalBytes } = runtime.state
     if ((probe.totalBytes ?? 0) !== totalBytes) {
       throw new Error(
@@ -1520,7 +1521,7 @@ export class DownloadManager {
     }
     if (splittable(runtime.requestPayload) && !probe.supportsRanges) {
       throw new Error(
-        'This server doesnâ€™t support resuming downloads. Try another link to the same file.'
+        'This server doesn’t support resuming downloads. Try another link to the same file.'
       )
     }
     // An ETag or date from another link proves nothing about its bytes: two different files can
@@ -1528,14 +1529,10 @@ export class DownloadManager {
     // bytes, so they're compared now, before anything from the new link is written.
     const verdict = await this.compareWithDisk(runtime, probe.finalUrl, browser)
     if (verdict === 'different') {
-      throw new Error(
-        'That link is to a different file: its bytes donâ€™t match whatâ€™s downloaded.'
-      )
+      throw new Error('That link is to a different file: its bytes don’t match what’s downloaded.')
     }
     if (verdict === 'unknown') {
-      throw new Error(
-        'Speed-o-Freq Sonic couldnâ€™t check that link against whatâ€™s downloaded. Try again.'
-      )
+      throw new Error('Sonic couldn’t check that link against what’s downloaded. Try again.')
     }
     if (!replaceable()) throw new Error('The download changed while its new link was checked.')
     runtime.requestPayload.url = probe.finalUrl
@@ -1606,16 +1603,55 @@ export class DownloadManager {
   // `byNetwork`: resumed by switching a network back on, rather than by Resume.
   private async resumeAfterVerifying(runtime: DownloadRuntime, byNetwork: boolean): Promise<void> {
     // The paused run can still be winding down: a writer closing, a sample check in flight. A new
-    // one must not start beside it â€” both would go on to publish, and act on each other's streams.
+    // one must not start beside it — both would go on to publish, and act on each other's streams.
     await runtime.runPromise
     // Just after launch the networks may not have been looked at yet.
     await this.networks.refresh()
 
     if ((await runtime.file.size().catch(() => -1)) < 0) {
-      runtime.state.error =
-        'The partial download file is unavailable. Reconnect the destination drive and try again.'
-      this.pushUpdate(runtime)
-      return
+      if (runtime.kind === 'http') {
+        // A deleted staging file cannot support saved block progress. Recreate sparse storage and
+        // restart safely from zero instead of leaving the task permanently unresumable.
+        try {
+          await runtime.file.recreate(runtime.state.totalBytes)
+          for (const block of runtime.blocks) {
+            block.status = 'pending'
+            block.bytesDownloaded = 0
+            block.bytesByInterface = {}
+            block.interfaceId = undefined
+          }
+          for (const stream of runtime.state.streams) {
+            stream.status = 'pending'
+            stream.currentBlockIndex = undefined
+            stream.hedge = undefined
+            stream.bytesDownloaded = 0
+            stream.speedBytesPerSec = 0
+          }
+          runtime.state.bytesDownloaded = 0
+          runtime.state.speedBytesPerSec = 0
+          runtime.state.peakSpeedBytesPerSec = undefined
+          runtime.state.speedHistory = {}
+          runtime.state.timeLeftSeconds = undefined
+          runtime.state.error = undefined
+          runtime.state.resumable = undefined
+          runtime.transfer.reset()
+          for (const network of runtime.state.networks) {
+            network.bytesDownloaded = 0
+            network.speedBytesPerSec = 0
+            network.retries = 0
+          }
+          await this.persistNow(runtime, true)
+        } catch (error) {
+          runtime.state.error = `The partial download file is missing and could not be recreated: ${describeError(error)}`
+          this.pushUpdate(runtime)
+          return
+        }
+      } else {
+        runtime.state.error =
+          'The torrent destination is missing. Reconnect its drive or restore the torrent files, then retry.'
+        this.pushUpdate(runtime)
+        return
+      }
     }
     if (
       runtime.cancelPromise ||
@@ -1687,6 +1723,8 @@ export class DownloadManager {
       for (const stream of runtime.state.streams) {
         if (stream.status !== 'completed') {
           stream.status = 'pending'
+          stream.currentBlockIndex = undefined
+          stream.hedge = undefined
         }
         stream.speedBytesPerSec = 0
       }
@@ -1891,7 +1929,7 @@ export class DownloadManager {
    * crawling connection) spans the sleep. All of it starts over. */
   systemResumed(): void {
     void this.refreshSchedule().catch((error) =>
-      console.error('[Speed-o-Freq Sonic] schedule after wake', error)
+      console.error('[Sonic] schedule after wake', error)
     )
     const now = Date.now()
     for (const runtime of this.runtimes.values()) {
@@ -1900,7 +1938,7 @@ export class DownloadManager {
     }
   }
 
-  /** Keeps the computer from sleeping while a download runs, which would stop it â€” as
+  /** Keeps the computer from sleeping while a download runs, which would stop it — as
    * qBittorrent and Transmission offer to. The display can still sleep. */
   private keepAwake(): void {
     const running = [...this.runtimes.values()].some(
@@ -2092,13 +2130,13 @@ export class DownloadManager {
       runtime.state.status === 'completed' ||
       runtime.state.status === 'cancelled' ||
       this.runtimes.get(id) !== runtime
-    if (settled()) throw new Error('This downloadâ€™s files canâ€™t change now')
+    if (settled()) throw new Error('This download’s files can’t change now')
 
     const chosen = chosenFiles(selected, torrent.files.length)
     const completed = runtime.pieces.map((piece) => piece.status === 'completed')
     const finished = finishedFiles(torrent.files, torrent.pieceLength, completed)
     if (chosen && [...finished].some((index) => !chosen.has(index))) {
-      throw new Error('A file thatâ€™s already downloaded stays')
+      throw new Error('A file that’s already downloaded stays')
     }
     const wanted = chosen && wantedPieces(torrent.files, torrent.pieceLength, chosen)
     let adding = 0
@@ -2108,7 +2146,7 @@ export class DownloadManager {
       }
     }
     await ensureDiskSpace(runtime.requestPayload.destinationDir, adding)
-    if (settled()) throw new Error('This downloadâ€™s files canâ€™t change now')
+    if (settled()) throw new Error('This download’s files can’t change now')
     if (turn !== runtime.fileChoices) return
 
     runtime.state.files = choiceOf(chosen, torrent.files.length)
@@ -2211,21 +2249,22 @@ export class DownloadManager {
       this.runtimes.delete(id)
       await this.removePersistedDownload(runtime)
       if (runtime.state.status === 'completed') {
-        await removeFromHistory([id])
+        // Keep the durable history entry but hide it from the main list.
+        await markHistoryRemoved(id)
         this.historyChanged()
       }
       return
     }
-    // A finished one, from history.
-    const entry = trashFile ? await findInHistory(id) : undefined
-    if (entry && !entry.missing) await trashDownload(entry)
-    await removeFromHistory([id])
+    // A finished one, from history. Removal never erases the audit/history record.
+    const entry = await findInHistory(id)
+    if (trashFile && entry && !entry.missing) await trashDownload(entry)
+    if (entry) await markHistoryRemoved(id)
     this.historyChanged()
   }
 
   /** Shows a download's file in its folder (while it's downloading, its `.sonic` staging file):
    * by the download's own path, never one the window
-   * names, and only once it's checked to be there â€” the window's view of that can be old (the
+   * names, and only once it's checked to be there — the window's view of that can be old (the
    * file moved or deleted since). When it isn't, the window is told to look again, and the
    * history it gets marks it missing. */
   async reveal(id: string): Promise<boolean> {
@@ -2296,7 +2335,7 @@ export class DownloadManager {
     let wake: { resolve: () => void; reject: (error: unknown) => void } | null = null
     let tickedAt = Date.now()
     // Readings carry over a pause, moved up to now: time paused isn't time downloading, so a
-    // stretch can run across one, and runs too short for a stretch of their own still count â€” as
+    // stretch can run across one, and runs too short for a stretch of their own still count — as
     // they do in AVG, which a reset here let read above PEAK.
     const lastReading = runtime.peakReadings.at(-1)
     const paused = lastReading ? tickedAt - lastReading.time : 0
@@ -2359,7 +2398,7 @@ export class DownloadManager {
     clearSpeeds(runtime.state)
 
     if (runtime.state.status !== 'downloading') {
-      // Paused, errored, or cancelled â€” nothing left to do right now. An error keeps what it has
+      // Paused, errored, or cancelled — nothing left to do right now. An error keeps what it has
       // unless it can't be resumed (see failDownload); cancel() discards it.
       if (runtime.state.status === 'error') {
         this.pushUpdate(runtime)
@@ -2374,7 +2413,7 @@ export class DownloadManager {
     runtime.publishing = true
     try {
       if (unitsOf(runtime).some((unit) => !isDone(unit))) {
-        throw new Error('Download is incomplete â€” refusing to publish the file')
+        throw new Error('Download is incomplete — refusing to publish the file')
       }
       if (runtime.kind === 'http' && runtime.requestPayload.expectedSha256) {
         const actual = await hashCompletedOutput(runtime.file.path)
@@ -2417,14 +2456,19 @@ export class DownloadManager {
         runtime.state.bytesDownloaded
       await this.persistNow(runtime)
       await runtime.file.discardLeftover().catch(() => {})
-      this.performCompletionAction(runtime.state.destinationPath, runtime.state.fileName)
+      this.performCompletionAction(
+        runtime.state.destinationPath,
+        runtime.state.fileName,
+        runtime.state.bytesDownloaded,
+        runtime.state.id
+      )
     } catch (error) {
       runtime.state.status = 'error'
       runtime.state.error = error instanceof Error ? error.message : String(error)
       // Keep the failure and publication intent on disk: after restart recovery can finish or
       // retry publication instead of silently restoring the previous checkpoint.
       await this.persistNow(runtime).catch((persistError: unknown) => {
-        console.error('[Speed-o-Freq Sonic] could not persist publication failure', persistError)
+        console.error('[Sonic] could not persist publication failure', persistError)
       })
       this.notify(
         'Download failed',
@@ -2456,7 +2500,7 @@ export class DownloadManager {
       clearSpeeds(runtime.state)
       this.pushUpdate(runtime)
       await this.persistNow(runtime).catch((error: unknown) => {
-        console.error('[Speed-o-Freq Sonic] could not persist final seeding state', error)
+        console.error('[Sonic] could not persist final seeding state', error)
       })
     } else if (seedAfterComplete) {
       // The ratio may have been reached during publication, before the seeding loop starts.
@@ -2494,8 +2538,8 @@ export class DownloadManager {
 
   /**
    * Brings the download's networks up to date with the computer's, and each network's streams in
-   * line with what it can do now. Runs every tick and whenever something changes â€” a network
-   * came or went, the user switched one, one stopped getting through â€” and is safe to run any
+   * line with what it can do now. Runs every tick and whenever something changes — a network
+   * came or went, the user switched one, one stopped getting through — and is safe to run any
    * time.
    *
    * Networks: every one on the computer is listed; one that turns up mid-download starts off,
@@ -2558,7 +2602,7 @@ export class DownloadManager {
     if (state.status !== 'downloading' || runtime.stop.signal.aborted) return
     if (!this.scheduleAllowsDownloads()) {
       void this.pause(state.id, true).catch((error) =>
-        console.error('[Speed-o-Freq Sonic] schedule cutoff', error)
+        console.error('[Sonic] schedule cutoff', error)
       )
       return
     }
@@ -2572,34 +2616,54 @@ export class DownloadManager {
     runtime.transfer.reconcile()
   }
 
-  private performCompletionAction(path: string, fileName: string): void {
-    const action = this.getCompletionAction()
-    if (action === 'open') {
-      void shell.openPath(path).then((error) => {
-        if (error) console.warn('[Speed-o-Freq Sonic] Could not open completed download:', error)
-      })
-      return
-    }
-    if (action === 'notify')
-      this.notify('Download complete', `${fileName} has finished downloading.`)
+  private performCompletionAction(
+    path: string,
+    fileName: string,
+    sizeBytes: number,
+    downloadId: string
+  ): void {
+    // Legacy "open" preferences now use the notification's explicit Open button rather than
+    // executing downloaded code automatically. "none" is the persistent off switch.
+    if (this.getCompletionAction() === 'none') return
+    this.notify('Download complete', fileName, path, sizeBytes, downloadId)
   }
 
-  private notify(title: string, body: string): void {
-    if (testKnobs.userDataDir || !Notification.isSupported()) return
-    try {
-      const notification = new Notification({ title, body })
-      notification.on('click', () => {
-        const window = this.getWindow()
-        if (window && !window.isDestroyed()) {
-          if (window.isMinimized()) window.restore()
-          window.show()
-          window.focus()
-        }
+  private notify(
+    title: string,
+    body: string,
+    completedPath?: string,
+    sizeBytes?: number,
+    dedupeKey?: string
+  ): void {
+    if (
+      (testKnobs.userDataDir && process.env['SONIC_E2E_NOTIFICATIONS'] !== '1') ||
+      this.getCompletionAction() === 'none'
+    )
+      return
+    void loadSettings()
+      .then((settings) => {
+        // Capture the main window before the toast is created; getAllWindows()[0] may then
+        // refer to the toast itself, which would close immediately after the click.
+        const mainWindow = this.getWindow()
+        return showCompletionToast({
+          title,
+          fileName: body,
+          path: completedPath,
+          sizeBytes,
+          dedupeKey,
+          themeSource: settings.themeSource ?? 'sonic',
+          onOpenApp: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              if (mainWindow.isMinimized()) mainWindow.restore()
+              mainWindow.show()
+              mainWindow.focus()
+            }
+          }
+        })
       })
-      notification.show()
-    } catch {
-      // Best-effort notification
-    }
+      .catch((error: unknown) => {
+        console.warn('[Sonic] could not show notification:', error)
+      })
   }
 
   private scheduleUpdate(runtime: DownloadRuntime): void {

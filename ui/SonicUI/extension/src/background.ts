@@ -23,12 +23,12 @@ async function showState(reached?: Reach): Promise<void> {
   const { capture } = await loadSettings()
   reached ??= await reach()
   const title = !capture
-    ? 'Speed-o-Freq Sonic: capture is off'
+    ? 'Sonic: capture is off'
     : reached === 'closed'
-      ? 'Speed-o-Freq Sonic isn’t open: downloads stay in the browser'
+      ? 'Sonic isn’t open: downloads stay in the browser'
       : reached === 'update'
-        ? 'Update Speed-o-Freq Sonic to use this extension'
-        : 'Speed-o-Freq Sonic'
+        ? 'Update Sonic to use this extension'
+        : 'Sonic'
   await api.action.setIcon({ path: capture && reached === 'ok' ? ICON : ICON_OFF })
   await api.action.setTitle({ title })
 }
@@ -87,16 +87,20 @@ async function closeEmptyTab(urls: readonly (string | undefined)[]): Promise<voi
   }
 }
 
-// In Chromium, answering later holds back the browser's own Save As dialog until Sonic has
-// decided, so the user is never asked twice. Firefox has no such event.
+// Tor has a response-header interceptor that can decide before the native download UI starts.
+// Running the normal downloads listener as well races that handoff and can submit the same URL twice.
+// All other browsers retain their existing downloads API path.
+const isTorExtension = /Tor Browser/i.test(api.runtime.getManifest().name)
 const determining = api.downloads.onDeterminingFilename
-if (determining) {
+if (!isTorExtension && determining) {
   determining.addListener((item, suggest) => {
     void capture(item).then((taken) => taken || suggest())
     return true
   })
-} else {
+} else if (!isTorExtension) {
   api.downloads.onCreated.addListener((item) => void capture(item))
+} else {
+  console.info('[Sonic Tor] Using response-header interception for automatic downloads.')
 }
 
 /** Deliberate context-menu actions are user-approved and can override automatic capture rules. */
@@ -194,17 +198,17 @@ function createMenu(): void {
   void api.contextMenus.removeAll().then(() => {
     api.contextMenus.create({
       id: MENU_ID,
-      title: 'Download with Speed-o-Freq Sonic',
+      title: 'Download with Sonic',
       contexts: ['link']
     })
     api.contextMenus.create({
       id: IMAGE_MENU_ID,
-      title: 'Download image with Speed-o-Freq Sonic',
+      title: 'Download image with Sonic',
       contexts: ['image']
     })
     api.contextMenus.create({
       id: SELECTION_MENU_ID,
-      title: 'Download selected URLs with Speed-o-Freq Sonic',
+      title: 'Download selected URLs with Sonic',
       contexts: ['selection']
     })
     api.contextMenus.create({

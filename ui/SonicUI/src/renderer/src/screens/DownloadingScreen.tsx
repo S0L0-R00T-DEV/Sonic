@@ -113,7 +113,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   const formatSpeed = useFormatSpeed()
   const formatSpeedLimit = useFormatSpeedLimit()
   const homeDir = useAppStore((store) => store.homeDir)
-  const speedLimit = useAppStore((store) => store.speedLimit)
+
   const slowMode = useAppStore((store) => store.slowMode)
   const slowModeSpeed = useAppStore((store) => store.slowModeSpeed)
   const speedHistory = download.speedHistory ?? {}
@@ -138,16 +138,12 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   useEffect(() => {
     if (isPaused) {
       const label = isQueued ? 'Queued' : 'Paused'
-      document.title = knownSize
-        ? `Speed-o'-Freq Sonic — ${label} (${percent}%)`
-        : `Speed-o'-Freq Sonic — ${label}`
+      document.title = knownSize ? `Sonic — ${label} (${percent}%)` : `Sonic — ${label}`
     } else {
-      document.title = knownSize
-        ? `Speed-o'-Freq Sonic — ${percent}%`
-        : "Speed-o'-Freq Sonic — downloading"
+      document.title = knownSize ? `Sonic — ${percent}%` : 'Sonic — downloading'
     }
     return () => {
-      document.title = "Speed-o'-Freq Sonic"
+      document.title = 'Sonic'
     }
   }, [percent, knownSize, isPaused, isQueued])
 
@@ -160,11 +156,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
   const [speedValue, speedUnit] = formatSpeed(effectiveSpeed).split(' ')
   // The cap over every download, beside the speed it holds down — slow mode named, so a low
   // number explains itself.
-  const speedCap = slowMode
-    ? ` · ${t('SLOW MODE')} ${formatSpeedLimit(slowModeSpeed)}`
-    : speedLimit !== undefined
-      ? ` · ${t('LIMIT')} ${formatSpeedLimit(speedLimit)}`
-      : ''
+  const speedCap = slowMode ? ' · ' + t('SLOW MODE') + ' ' + formatSpeedLimit(slowModeSpeed) : ''
   // Every network is a row, for switching it on or off; the charts draw only those in play.
   const rows = groupByNetwork(download)
   const rowVisuals = rows.map((row) => networkVisual(row.id, row.kind, row.label))
@@ -223,9 +215,8 @@ export const DownloadingScreen = memo(function DownloadingScreen({
       )}
       {/* Hero band — always visible under the header */}
       <HeroBand>
-        {/* At their designed size: a wider window opens a gap between the speed and the chart
-            (ml-auto) rather than stretching the merge into rails or the chart into a ribbon. */}
-        <div className="flex items-center gap-[14px]">
+        {/* The hero reflows at narrower window widths instead of squeezing the chart or cutting off stats. */}
+        <div className="flex flex-wrap items-start gap-x-[14px] gap-y-4">
           <CombineDiagram
             networks={groups.map((group, index) => ({
               solid: visuals[index].solid,
@@ -301,7 +292,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
           </div>
 
           <div
-            className={`ml-auto min-w-0 max-w-[640px] flex-1 transition-opacity duration-200 ${
+            className={`ml-auto min-w-0 max-w-[640px] flex-[1_1_320px] transition-opacity duration-200 ${
               isPaused ? 'opacity-45' : 'opacity-100'
             }`}
           >
@@ -340,7 +331,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
               />
               {isTorrent && <TorrentBadge />}
             </div>
-            <div className="flex min-w-0 items-center gap-[7px] font-mono text-[12.5px] leading-[1.2] tabular-nums text-[var(--text-secondary)]">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-[7px] gap-y-1 font-mono text-[12.5px] leading-[1.2] tabular-nums text-[var(--text-secondary)]">
               <span>
                 {formatBytes(download.bytesDownloaded)}
                 {knownSize ? ` of ${formatBytes(wantedBytes(download))}` : ''}
@@ -412,7 +403,7 @@ export const DownloadingScreen = memo(function DownloadingScreen({
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <span className="ml-auto flex min-w-0 items-center gap-1.5 pl-3 text-[11px] text-muted-foreground">
+                    <span className="ml-auto flex min-w-0 max-w-full items-center gap-1.5 pl-1 text-[11px] text-muted-foreground sm:pl-3">
                       <Folder aria-hidden className="size-3 shrink-0" />
                       <span className="sr-only">{t('Saving to')}</span>
                       <span className="truncate">

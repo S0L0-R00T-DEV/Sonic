@@ -37,6 +37,8 @@ desktop.ini
 **/out/
 **/dist/
 **/dist-sonic/
+**/dist-sonic-release/
+**/dist-sonic-final/
 **/test-results/
 **/playwright-report/
 **/*.tsbuildinfo
@@ -65,3 +67,16 @@ credentials.*
 **/*.orig
 **/*.tmp
 /PROJECT_MEMORY.md
+
+# Local build and test logs
+/build-*.log
+/build-*-exit-code.txt
+/playwright-*.log
+/playwright-*-exit-code.txt
+
+/ui/SonicUI/dist-sonic-baseline-*/
+/ui/SonicUI/dist-sonic-update-test-*/
+/ui/SonicUI/dist-sonic-release/
+/ui/SonicUI/dist-sonic-*/
+/tests/
+/ui/SonicUI/tests/

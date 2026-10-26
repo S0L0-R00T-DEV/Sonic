@@ -1,7 +1,7 @@
-﻿import { useFormatSpeed } from '../hooks/useFormatSpeed'
+import { useFormatSpeed } from '../hooks/useFormatSpeed'
 
 const ROW_HEIGHT = 36
-// Gaps between the label column and the rest of the diagram stay fixed â€” only the label
+// Gaps between the label column and the rest of the diagram stay fixed — only the label
 // column's own width flexes with the longest network name, so a long custom label (the dev
 // tool lets you type anything) grows the diagram instead of getting cut off.
 const DOT_GAP = 8
@@ -12,7 +12,7 @@ const END_PAD = 8
 const MIN_LABEL_X = 68
 const MAX_LABEL_CHARS = 18
 // Rough advance width (px) of one uppercase glyph in the label's 8.5px mono font plus its
-// 0.08em letter-spacing â€” an overestimate is safer here than an underestimate, since this
+// 0.08em letter-spacing — an overestimate is safer here than an underestimate, since this
 // sizes an SVG column rather than flowing text a browser could wrap or ellipsize for us.
 const CHAR_WIDTH = 6.4
 const LABEL_EDGE_PAD = 4
@@ -20,7 +20,7 @@ const LABEL_EDGE_PAD = 4
 export interface CombineDiagramNetwork {
   solid: string
   label: string
-  /** The network's current speed, shown beside its label. `undefined` or zero reads as "â€”". */
+  /** The network's current speed, shown beside its label. `undefined` or zero reads as "—". */
   speedBytesPerSec?: number
   /** Whether the network is carrying bytes right now (an HTTP stream fetching, or a torrent peer
    * receiving). Drives the flow animation; derived from connection status rather than speed, so
@@ -72,7 +72,7 @@ export function CombineDiagram({
           const color = muted ? 'var(--icon-muted)' : network.solid
           // Three deterministic states: paused (the whole download stopped), idle (the network
           // is on but fetching nothing), or flowing (the network is carrying bytes). Muted is a
-          // static illustration â€” the empty-state diagram â€” so it never animates or dims.
+          // static illustration — the empty-state diagram — so it never animates or dims.
           const flowing = !muted && !paused && network.active === true
           const opacity = muted ? 1 : paused ? 0.55 : flowing ? 1 : 0.35
           return (
@@ -132,10 +132,10 @@ export function CombineDiagram({
             ? `${network.label
                 .trim()
                 .slice(0, MAX_LABEL_CHARS - 1)
-                .toUpperCase()}â€¦`
+                .toUpperCase()}…`
             : network.label.trim().toUpperCase()
         const hasSpeed = network.speedBytesPerSec != null && network.speedBytesPerSec > 0
-        const speedText = hasSpeed ? formatSpeed(network.speedBytesPerSec!) : 'â€”'
+        const speedText = hasSpeed ? formatSpeed(network.speedBytesPerSec!) : '—'
 
         return (
           <g key={`info-${index}`}>

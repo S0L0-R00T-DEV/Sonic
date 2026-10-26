@@ -11,9 +11,9 @@ export interface Settings {
   fileTypes: string[]
 }
 
-/** Automatic interception is opt-in; explicit context-menu handoffs still work while it is off. */
+/** Capture is enabled after the user explicitly installs the extension; it can be disabled any time. */
 export const DEFAULT_SETTINGS: Settings = {
-  capture: false,
+  capture: true,
   sites: [],
   skipSmall: false,
   minMegabytes: 1,

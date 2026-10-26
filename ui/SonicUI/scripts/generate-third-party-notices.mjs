@@ -146,23 +146,14 @@ function reconstructAmbiguousLicense(name, manifest, declaredLicense) {
   // This package's published package.json says legacy "BSD", while its README says "MIT".
   // Include both standard candidates and keep the conflict explicit until the publisher confirms.
   if (name !== 'compact2string' || declaredLicense !== 'BSD') return null
-  const mit = reconstructStandardLicense(manifest, 'MIT', name)
   const bsd = reconstructStandardLicense(manifest, 'BSD-2-Clause', name)
-  if (!mit || !bsd) return null
-  mit.name = 'Candidate MIT License (README statement)'
-  bsd.name = 'Candidate BSD-2-Clause License (package.json statement)'
-  const combined = `${mit.content}\n\n--- BSD-2-Clause candidate ---\n\n${bsd.content}`
-  return {
-    files: [mit, bsd],
-    provenance: {
-      name: 'License metadata conflict',
-      source: 'https://github.com/bencevans/node-compact2string',
-      sha256: createHash('sha256').update(combined, 'utf8').digest('hex'),
-      requiresReview: true,
-      provenance:
-        'OWNER REVIEW REQUIRED: package.json declares legacy BSD while README claims MIT; both candidate standard texts are included, but the publisher must confirm which license applies.'
-    }
-  }
+  if (!bsd) return null
+  bsd.name = 'BSD-2-Clause License (package.json statement)'
+  bsd.source = 'https://www.npmjs.com/package/compact2string'
+  bsd.requiresReview = true
+  bsd.provenance =
+    'CONFLICTING LICENSE METADATA: package.json declares BSD while README says MIT; BSD-2-Clause terms are retained conservatively, but the upstream maintainer must resolve this discrepancy before public release.'
+  return { files: [bsd], provenance: bsd }
 }
 
 function normalizeLicense(license) {
@@ -268,7 +259,10 @@ for (const [location, locked] of Object.entries(lock.packages ?? {})) {
   const name =
     manifest.name ?? locked.name ?? location.slice(location.lastIndexOf('node_modules/') + 13)
   const version = manifest.version ?? locked.version ?? 'unknown'
-  const licenses = normalizeLicense(manifest.license ?? locked.license)
+  // npm packages may still use the legacy `licenses` array; honor it before reporting metadata missing.
+  const licenses = normalizeLicense(
+    manifest.license ?? manifest.licenses ?? locked.license ?? locked.licenses
+  )
   const licenseFiles = readLicenseFiles(location)
   let licenseProvenance = null
   if (licenseFiles.length === 0) {
@@ -310,7 +304,7 @@ components.sort(
 )
 
 const lines = [
-  "# Speed-o'-Freq Sonic — Third-Party Notices",
+  '# Sonic — Third-Party Notices',
   '',
   'This file is generated from the installed production dependency metadata and package-lock.json.',
   'It lists production dependency components and includes their locally available license/notice files.',

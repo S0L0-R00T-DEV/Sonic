@@ -12,18 +12,19 @@ import { useDownloadActions, useDownloadActionsState } from './downloadActionsCo
 import { ACTION_META } from './downloadActionMeta'
 import { Button } from './ui/button'
 import { useLocale } from '../i18n'
+import { useFormatSpeedLimit } from '../hooks/useFormatSpeed'
 
 /** The top of a download's own screen, laid out as the list's header is: the way back to the
  * list on the left; on the right the ways out (Cancel while it's unfinished; Remove, and Move to
  * Trash, after) and what the download can do next. They're what its row and its menu offer, from the same list. */
 export function DetailHeader({ download }: { download: DownloadItem }): React.JSX.Element {
   const { t } = useLocale()
+  const formatSpeedLimit = useFormatSpeedLimit()
   const setView = useAppStore((store) => store.setView)
   const { perform } = useDownloadActions()
   const { busy } = useDownloadActionsState()
-  const [speedLimitError, setSpeedLimitError] = useState<string | null>(null)
   const [priorityError, setPriorityError] = useState<string | null>(null)
-  const [uploadSpeedLimitError, setUploadSpeedLimitError] = useState<string | null>(null)
+  const [downloadSpeedError, setDownloadSpeedError] = useState<string | null>(null)
   const [uploadRatioError, setUploadRatioError] = useState<string | null>(null)
   const [trackerRefreshError, setTrackerRefreshError] = useState<string | null>(null)
   const [trackerRefreshBusy, setTrackerRefreshBusy] = useState(false)
@@ -62,7 +63,7 @@ export function DetailHeader({ download }: { download: DownloadItem }): React.JS
   }
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b-[0.5px] border-border px-5">
+    <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b-[0.5px] border-border px-4 py-2">
       <button
         type="button"
         onClick={() => setView({ name: 'list' })}
@@ -71,7 +72,7 @@ export function DetailHeader({ download }: { download: DownloadItem }): React.JS
         <ChevronLeft className="size-4.5" />
         {t('Downloads')}
       </button>
-      <div className="flex-1" />
+      <div className="min-w-[6px] flex-1" />
       {!isFinished(download) && (
         <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           <span className="hidden 2xl:inline">{t('Priority')}</span>
@@ -96,67 +97,44 @@ export function DetailHeader({ download }: { download: DownloadItem }): React.JS
           </select>
         </label>
       )}
+
       {!isFinished(download) && (
         <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="hidden 2xl:inline">{t('Receive cap')}</span>
+          <span className="hidden 2xl:inline">{t('Download receive speed limit')}</span>
           <select
             aria-label={t('Download receive speed limit')}
-            className="h-8 max-w-36 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            className="h-8 max-w-32 rounded-md border border-border bg-background px-2 text-xs text-foreground"
             value={download.maxDownloadSpeedBytesPerSecond?.toString() ?? ''}
             onChange={(event) => {
               const value = event.currentTarget.value
-              const limit = value === '' ? null : Number(value)
-              setSpeedLimitError(null)
+              const bytesPerSecond = value === '' ? null : Number(value)
+              setDownloadSpeedError(null)
               void window.sonic
-                .setDownloadSpeedLimit(download.id, limit)
+                .setDownloadSpeedLimit(download.id, bytesPerSecond)
                 .catch((error: unknown) => {
-                  setSpeedLimitError(error instanceof Error ? error.message : String(error))
+                  setDownloadSpeedError(error instanceof Error ? error.message : String(error))
                 })
             }}
-            title={speedLimitError ?? t('Limit the combined receive speed of this download')}
+            title={downloadSpeedError ?? t('Limit the combined receive speed of this download')}
           >
-            <option value="">{t('Unlimited')}</option>
-            <option value={String(64 * 1024)}>64 KiB/s</option>
-            <option value={String(128 * 1024)}>128 KiB/s</option>
-            <option value={String(256 * 1024)}>256 KiB/s</option>
-            <option value={String(512 * 1024)}>512 KiB/s</option>
-            <option value={String(1024 * 1024)}>1 MiB/s</option>
-            <option value={String(2 * 1024 * 1024)}>2 MiB/s</option>
-            <option value={String(5 * 1024 * 1024)}>5 MiB/s</option>
-            <option value={String(10 * 1024 * 1024)}>10 MiB/s</option>
+            <option value="">Unlimited</option>
+            {[64, 128, 256, 512, 1024, 2048, 5120, 10240].map((kib) => {
+              const bytesPerSecond = kib * 1024
+              return (
+                <option key={bytesPerSecond} value={String(bytesPerSecond)}>
+                  {formatSpeedLimit(bytesPerSecond)}
+                </option>
+              )
+            })}
           </select>
+          {downloadSpeedError && (
+            <span role="alert" className="max-w-40 truncate text-xs text-destructive">
+              {downloadSpeedError}
+            </span>
+          )}
         </label>
       )}
-      {!isFinished(download) && download.kind === 'torrent' && (
-        <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="hidden 2xl:inline">{t('Upload cap')}</span>
-          <select
-            aria-label={t('Torrent upload speed limit')}
-            className="h-8 max-w-36 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-            value={download.maxUploadSpeedBytesPerSecond?.toString() ?? ''}
-            onChange={(event) => {
-              const value = event.currentTarget.value
-              const limit = value === '' ? null : Number(value)
-              setUploadSpeedLimitError(null)
-              void window.sonic.setUploadSpeedLimit(download.id, limit).catch((error: unknown) => {
-                setUploadSpeedLimitError(error instanceof Error ? error.message : String(error))
-              })
-            }}
-            title={uploadSpeedLimitError ?? t('Limit the upload speed for this torrent only')}
-          >
-            <option value="">{t('Unlimited')}</option>
-            <option value={String(16 * 1024)}>16 KiB/s</option>
-            <option value={String(32 * 1024)}>32 KiB/s</option>
-            <option value={String(64 * 1024)}>64 KiB/s</option>
-            <option value={String(128 * 1024)}>128 KiB/s</option>
-            <option value={String(256 * 1024)}>256 KiB/s</option>
-            <option value={String(512 * 1024)}>512 KiB/s</option>
-            <option value={String(1024 * 1024)}>1 MiB/s</option>
-            <option value={String(2 * 1024 * 1024)}>2 MiB/s</option>
-            <option value={String(5 * 1024 * 1024)}>5 MiB/s</option>
-          </select>
-        </label>
-      )}
+
       {download.kind === 'torrent' && !isFinished(download) && (
         <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           <span className="hidden 2xl:inline">{t('Upload ratio')}</span>

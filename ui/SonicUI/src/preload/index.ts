@@ -10,7 +10,34 @@ import type {
   MediaConversionProgress
 } from '../shared/types'
 
-/** Typed wrapper around ipcRenderer.invoke Ã¢â‚¬â€ the channel name picks its args/result shape out of
+// Register OS-file drag handlers in preload, before React mounts. On Windows, an external
+// file drag can otherwise retain the prohibited-drop cursor if the page has not attached its
+// handlers yet. The renderer's capture handlers still decide what to do with the dropped item.
+window.addEventListener(
+  'dragenter',
+  (event) => {
+    event.preventDefault()
+  },
+  true
+)
+window.addEventListener(
+  'dragover',
+  (event) => {
+    event.preventDefault()
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+  },
+  true
+)
+window.addEventListener(
+  'drop',
+  (event) => {
+    // Prevent Chromium from navigating to a dropped file; the renderer handles valid inputs.
+    event.preventDefault()
+  },
+  true
+)
+
+/** Typed wrapper around ipcRenderer.invoke — the channel name picks its args/result shape out of
  * IpcContract, so a call here that doesn't match what registerIpcHandlers (main) actually handles
  * is a compile error instead of a silent runtime mismatch. */
 function invoke<K extends keyof IpcContract>(
@@ -22,7 +49,7 @@ function invoke<K extends keyof IpcContract>(
 
 const sonicApi = {
   platform: process.platform,
-  // Sync on purpose Ã¢â‚¬â€ see InitialState. One small read, once, before the renderer's first paint.
+  // Sync on purpose — see InitialState. One small read, once, before the renderer's first paint.
   initialState: ipcRenderer.sendSync(IpcChannels.getInitialState) as InitialState,
 
   minimizeWindow: () => invoke('minimizeWindow'),
@@ -31,6 +58,9 @@ const sonicApi = {
   listInterfaces: () => invoke('listInterfaces'),
   deviceBindingSupported: () => invoke('deviceBindingSupported'),
   openNetworkSettings: () => invoke('openNetworkSettings'),
+  openBrowserExtensionPage: () => invoke('openBrowserExtensionPage', 'firefox'),
+  copyBrowserExtensionFolderPath: () => invoke('copyBrowserExtensionFolderPath', 'firefox'),
+  copyChromiumExtensionFolderPath: () => invoke('copyChromiumExtensionFolderPath'),
   updateSettings: (patch: AppSettings) => invoke('updateSettings', patch),
   probeUrl: (url: string) => invoke('probeUrl', url),
   checkForUpdate: (repository: string) => invoke('checkForUpdate', repository),
@@ -99,7 +129,7 @@ const sonicApi = {
   trustPluginKey: (keyId: string, publicKeyPem: string) =>
     invoke('trustPluginKey', keyId, publicKeyPem),
   revokePluginKey: (keyId: string) => invoke('revokePluginKey', keyId),
-  installPlugin: (manifestJson: string) => invoke('installPlugin', manifestJson),
+  installPlugin: () => invoke('installPlugin'),
   setPluginPermissions: (
     pluginId: string,
     permissions: import('../shared/pluginApi').SonicPluginPermission[]
@@ -131,9 +161,8 @@ const sonicApi = {
     invoke('resumeFromLink', linkId, downloadId),
   dismissLink: (id: string) => invoke('dismissLink', id),
   saveDiagnosticReport: (content: string) => invoke('saveDiagnosticReport', content),
-  exportStorageBackup: () => invoke('exportStorageBackup'),
+  exportStorageBackup: (kind: 'settings' | 'history') => invoke('exportStorageBackup', kind),
   restoreStorageBackup: () => invoke('restoreStorageBackup'),
-  configurePortableStorage: () => invoke('configurePortableStorage'),
   getStorageInfo: () => invoke('getStorageInfo'),
   remoteControlState: () => invoke('remoteControlState'),
   enableRemoteControl: (interfaceId: string) => invoke('enableRemoteControl', interfaceId),
@@ -179,7 +208,7 @@ const sonicApi = {
 
 export type SonicApi = typeof sonicApi
 
-// Nothing in the renderer needs raw Electron/Node access Ã¢â‚¬â€ only the typed sonicApi above is
+// Nothing in the renderer needs raw Electron/Node access — only the typed sonicApi above is
 // exposed. The @electron-toolkit/preload electronAPI (which hands the renderer an unrestricted
 // ipcRenderer.invoke/send/on on any channel) is deliberately not bridged.
 if (process.contextIsolated) {

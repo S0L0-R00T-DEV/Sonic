@@ -1,5 +1,10 @@
 import { DEFAULT_DOWNLOAD_SCHEDULE, validSchedule } from '@shared/downloadSchedule'
-import { DOWNLOADS_AT_ONCE, type AppSettings, type DownloadSchedule } from '@shared/types'
+import {
+  DEFAULT_SLOW_MODE_SPEED,
+  DOWNLOADS_AT_ONCE,
+  type AppSettings,
+  type DownloadSchedule
+} from '@shared/types'
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { describeError } from '../utils/format'
@@ -16,8 +21,9 @@ import {
 import { Alert, AlertDescription } from './ui/alert'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
-import { Minus, Plus } from 'lucide-react'
+import { Check, Download, Minus, Plus, Tags } from 'lucide-react'
 import { ScheduleFields } from './ScheduleFields'
+import { DownloadOrganizationDialog } from './DownloadOrganizationDialog'
 import { PluginManagement } from './PluginManagement'
 import { RemoteControlSettings } from './RemoteControlSettings'
 import { PerformanceDiagnostics } from './PerformanceDiagnostics'
@@ -25,13 +31,14 @@ import { useLocale } from '../i18n'
 
 type Draft = Pick<
   ReturnType<typeof useAppStore.getState>,
-  'downloadsAtOnce' | 'downloadSchedule' | 'completionAction'
+  'downloadsAtOnce' | 'downloadSchedule' | 'completionAction' | 'slowModeSpeed'
 >
 
 const DEFAULTS = {
   downloadsAtOnce: DOWNLOADS_AT_ONCE.default,
   downloadSchedule: undefined,
-  completionAction: 'notify'
+  completionAction: 'notify',
+  slowModeSpeed: DEFAULT_SLOW_MODE_SPEED
 } satisfies Partial<Draft>
 
 export function LimitsDialog({
@@ -74,37 +81,39 @@ export function LimitsDialog({
 }
 
 function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element {
-  const { locale, setLocale, t } = useLocale()
+  const { t } = useLocale()
   const [draft, setDraft] = useState<Draft>(() => {
-    const { downloadsAtOnce, downloadSchedule, completionAction } = useAppStore.getState()
-    return { downloadsAtOnce, downloadSchedule, completionAction }
+    const { downloadsAtOnce, downloadSchedule, completionAction, slowModeSpeed } =
+      useAppStore.getState()
+    return { downloadsAtOnce, downloadSchedule, completionAction, slowModeSpeed }
   })
+  const [speedMagnitude, setSpeedMagnitude] = useState<'KB' | 'MB' | 'GB'>(() => {
+    const unit = useAppStore.getState().speedUnit
+    return unit.startsWith('GB') ? 'GB' : unit.startsWith('KB') ? 'KB' : 'MB'
+  })
+  const [slowModeLimit, setSlowModeLimit] = useState(() =>
+    String(Math.max(1, Math.round(useAppStore.getState().slowModeSpeed / (1024 * 1024))))
+  )
   const [confirmReset, setConfirmReset] = useState(false)
+  const [tagsRulesOpen, setTagsRulesOpen] = useState(false)
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false)
+  const [clearingHistory, setClearingHistory] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [storageInfo, setStorageInfo] = useState<{ userDataDir: string; portable: boolean } | null>(
+  const [storageInfo, setStorageInfo] = useState<{ userDataDir: string } | null>(
     null
   )
   const [storageBusy, setStorageBusy] = useState(false)
+  const [exportChoiceOpen, setExportChoiceOpen] = useState(false)
   const [storageMessage, setStorageMessage] = useState<string | null>(null)
-  const [expectedSha256, setExpectedSha256] = useState('')
-  const [integrityBusy, setIntegrityBusy] = useState(false)
-  const [integrityMessage, setIntegrityMessage] = useState<string | null>(null)
-  const [updateRepository, setUpdateRepository] = useState(
-    () => useAppStore.getState().updateRepository ?? ''
+  const [browserBusy, setBrowserBusy] = useState<string | null>(null)
+  const [chromiumPathCopied, setChromiumPathCopied] = useState(false)
+  const [firefoxDownloaded, setFirefoxDownloaded] = useState(false)
+  const [browserActionMessage, setBrowserActionMessage] = useState<string | null>(null)
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(
+    () => useAppStore.getState().autoUpdateEnabled ?? true
   )
-  const [publisherPublicKeyPem, setPublisherPublicKeyPem] = useState(
-    () => useAppStore.getState().publisherPublicKeyPem ?? ''
-  )
-  const [publisherKeyFingerprint, setPublisherKeyFingerprint] = useState(
-    () => useAppStore.getState().publisherKeyFingerprint ?? ''
-  )
-  const [expectedPublisherFingerprint, setExpectedPublisherFingerprint] = useState(
-    () => useAppStore.getState().publisherKeyFingerprint ?? ''
-  )
-  const [signedManifestJson, setSignedManifestJson] = useState('')
-  const [publisherBusy, setPublisherBusy] = useState(false)
-  const [publisherTrustMessage, setPublisherTrustMessage] = useState<string | null>(null)
+  const updateRepository = 'S0L0-R00T-DEV/Sonic'
   const [updateBusy, setUpdateBusy] = useState(false)
   const [updateResult, setUpdateResult] = useState<Awaited<
     ReturnType<typeof window.sonic.checkForUpdate>
@@ -123,12 +132,23 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
       .catch((cause: unknown) => {
         setStorageMessage(describeError(cause))
       })
-  }, [])
-  const valid = draft.downloadSchedule === undefined || validSchedule(draft.downloadSchedule)
+  }, [t])
+  const requestedSlowModeSpeed = Number(slowModeLimit) * 1024 * 1024
+  const validSlowModeLimit =
+    slowModeLimit.trim() !== '' &&
+    Number.isInteger(Number(slowModeLimit)) &&
+    Number.isFinite(requestedSlowModeSpeed) &&
+    requestedSlowModeSpeed > 0 &&
+    requestedSlowModeSpeed <= Number.MAX_SAFE_INTEGER
   const atDefaults =
     draft.downloadsAtOnce === DEFAULTS.downloadsAtOnce &&
     draft.downloadSchedule === DEFAULTS.downloadSchedule &&
-    draft.completionAction === DEFAULTS.completionAction
+    draft.completionAction === DEFAULTS.completionAction &&
+    Math.round(requestedSlowModeSpeed) === DEFAULT_SLOW_MODE_SPEED &&
+    speedMagnitude === 'MB'
+  const valid =
+    (draft.downloadSchedule === undefined || validSchedule(draft.downloadSchedule)) &&
+    validSlowModeLimit
 
   const save = async (): Promise<void> => {
     setSaving(true)
@@ -137,10 +157,19 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
     const patch: AppSettings = {}
     if (draft.downloadsAtOnce !== current.downloadsAtOnce)
       patch.downloadsAtOnce = draft.downloadsAtOnce
-    if (draft.completionAction !== current.completionAction)
-      patch.completionAction = draft.completionAction
     if (draft.downloadSchedule !== current.downloadSchedule)
       patch.downloadSchedule = draft.downloadSchedule
+    if (draft.completionAction !== current.completionAction)
+      patch.completionAction = draft.completionAction
+    const slowModeSpeed = Math.round(requestedSlowModeSpeed)
+    if (slowModeSpeed !== current.slowModeSpeed) patch.slowModeSpeed = slowModeSpeed
+    if (
+      speedMagnitude !==
+      (current.speedUnit.startsWith('GB') ? 'GB' : current.speedUnit.startsWith('KB') ? 'KB' : 'MB')
+    ) {
+      patch.speedUnit =
+        `${speedMagnitude}${current.speedUnit.endsWith('ps') ? 'ps' : '/s'}` as AppSettings['speedUnit']
+    }
     try {
       await window.sonic.updateSettings(patch)
       useAppStore.setState(patch)
@@ -153,25 +182,29 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
 
   const resetDraft = (): void => {
     setDraft({ ...DEFAULTS })
+    setSpeedMagnitude('MB')
+    setSlowModeLimit(String(Math.round(DEFAULT_SLOW_MODE_SPEED / (1024 * 1024))))
     setConfirmReset(false)
   }
 
-  const runStorageAction = async (action: 'export' | 'restore' | 'portable'): Promise<void> => {
+  const runStorageAction = async (action: 'export' | 'restore', exportKind?: 'settings' | 'history'): Promise<void> => {
     setStorageBusy(true)
     setStorageMessage(null)
     try {
       if (action === 'export') {
-        const saved = await window.sonic.exportStorageBackup()
-        setStorageMessage(saved ? 'Backup exported.' : 'Backup export cancelled.')
-      } else if (action === 'restore') {
-        const restored = await window.sonic.restoreStorageBackup()
-        if (restored)
-          setStorageMessage(
-            'Backup validated and restored. Sonic is restarting to load saved tasks.'
-          )
+        if (!exportKind) return
+        const saved = await window.sonic.exportStorageBackup(exportKind)
+        setExportChoiceOpen(false)
+        setStorageMessage(saved ? (exportKind === 'history' ? 'Download history exported.' : 'Sonic settings exported.') : 'Export cancelled.')
       } else {
-        const destination = await window.sonic.configurePortableStorage()
-        if (destination) setStorageMessage('Portable storage configured. Sonic is restarting.')
+        const restored = await window.sonic.restoreStorageBackup()
+        if (restored?.kind === 'history') {
+          setStorageMessage(`Download history imported (${restored.historyEntries} entries merged).`)
+        } else if (restored?.kind === 'settings') {
+          setStorageMessage('Sonic settings restored. Sonic is restarting to load them.')
+        } else if (restored?.kind === 'sonic') {
+          setStorageMessage('Sonic backup restored. Sonic is restarting to load saved tasks.')
+        }
       }
     } catch (cause) {
       setStorageMessage(describeError(cause))
@@ -186,44 +219,157 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
         <DialogTitle className="text-[16px] font-semibold">{t('settings')}</DialogTitle>
       </div>
       <fieldset disabled={saving} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <section className="flex flex-col gap-2 border-t-[0.5px] border-border py-3">
+          <h3 className="font-sans text-[14px] leading-none font-semibold">Chromium browser integration</h3>
+          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">Sonic does not detect or launch Chromium browsers. Open your preferred browser and choose Manage extensions, or enter <code>chrome://extensions</code>. Other Chromium browsers may use their own browser-name scheme or the same Manage extensions menu.</p>
+          <div>
+            <Button type="button" size="sm" variant={chromiumPathCopied ? 'default' : 'secondary'} className={chromiumPathCopied ? 'bg-emerald-600 text-white hover:bg-emerald-700' : undefined} disabled={browserBusy === 'chromium-copy-path'} onClick={() => {
+              setBrowserBusy('chromium-copy-path')
+              setChromiumPathCopied(false)
+              setBrowserActionMessage(null)
+              void window.sonic.copyChromiumExtensionFolderPath()
+                .then((result) => {
+                  setChromiumPathCopied(result.copied)
+                  setBrowserActionMessage(result.copied ? 'Path copied. In the folder picker, paste it into the address bar and select the chromium folder.' : (result.error ?? 'Could not find the Chromium folder.'))
+                })
+                .catch((cause: unknown) => setBrowserActionMessage(describeError(cause)))
+                .finally(() => setBrowserBusy(null))
+            }}>{chromiumPathCopied ? <><Check className="mr-1 size-4" />Copied</> : browserBusy === 'chromium-copy-path' ? 'Copying…' : 'Copy extension path'}</Button>
+          </div>
+          <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+            <li>Open <code>chrome://extensions</code> in Chrome, or open your browser’s own Extensions / Manage extensions page in another Chromium browser.</li>
+            <li>Turn on <strong>Developer mode</strong>.</li>
+            <li>Click <strong>Load unpacked</strong>. A folder-selection pop-up window will appear.</li>
+            <li>Click <strong>Copy extension path</strong> above. In the pop-up window, paste the copied path into the address bar, then open and select the <strong>chromium</strong> folder. Make sure you select the folder that directly contains <code>manifest.json</code>, then click <strong>Select Folder</strong>.</li>
+            <li>Enable the extension and configure it through the browser’s extension menu or the extension’s Options page.</li>
+          </ol>
+          <details className="mt-3 rounded-md border border-border px-3 py-2">
+            <summary className="cursor-pointer text-sm font-medium">Tested and working Chromium browsers</summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+              <li>Dia</li>
+              <li>Opera</li>
+              <li>Google Chrome</li>
+              <li>UC Browser</li>
+              <li>Brave</li>
+            </ul>
+          </details>
+          <div className="mt-3 border-t border-border pt-3">
+            <h4 className="text-sm font-semibold">Firefox integration</h4>
+            <p className="text-xs text-muted-foreground">Firefox uses its separate XPI package and Add-ons Manager.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="secondary" disabled={browserBusy === "firefox"} onClick={() => { setBrowserBusy("firefox"); setBrowserActionMessage(null); void window.sonic.openBrowserExtensionPage().then((result) => { if (!result.opened) setBrowserActionMessage(result.error ?? "Could not open Firefox Add-ons Manager."); }).catch((cause: unknown) => setBrowserActionMessage(describeError(cause))).finally(() => setBrowserBusy(null)); }}>{browserBusy === "firefox" ? t("opening") : "Open Firefox Add-ons"}</Button>
+              <Button type="button" size="sm" variant={firefoxDownloaded ? 'default' : 'outline'} className={firefoxDownloaded ? 'bg-emerald-600 text-white hover:bg-emerald-700' : undefined} disabled={browserBusy === "firefox-download"} onClick={() => { setBrowserBusy("firefox-download"); setFirefoxDownloaded(false); setBrowserActionMessage(null); void window.sonic.copyBrowserExtensionFolderPath().then((result) => { setFirefoxDownloaded(result.copied); setBrowserActionMessage(result.copied ? "Downloaded to your Downloads folder." : (result.error ?? "Could not save the package.")); }).catch((cause: unknown) => setBrowserActionMessage(describeError(cause))).finally(() => setBrowserBusy(null)); }}>{firefoxDownloaded ? <><Download className="mr-1 size-4" />Downloaded</> : browserBusy === "firefox-download" ? "Downloading…" : "Download Firefox extension"}</Button>
+            </div>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+              <li>Press <strong>Download extension</strong>. Sonic saves <strong>SDMFFE.xpi</strong> to your Downloads folder automatically.</li>
+              <li>Press <strong>Open Firefox Add-ons</strong> to open Firefox Add-ons Manager.</li>
+              <li>In the top-right area, click the settings gear icon.</li>
+              <li>Choose <strong>Install Add-on From File…</strong>.</li>
+              <li>Open your Downloads folder, select <strong>SDMFFE.xpi</strong>, and click Open.</li>
+              <li>When Firefox asks for confirmation, click <strong>Add</strong>. The Sonic Download Manager extension is installed.</li>
+            </ol>
+          </div>
+          {browserActionMessage && <p role="status" className="break-all text-xs text-muted-foreground">{browserActionMessage}</p>}
+        </section>
+        <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
+          <h3 className="font-sans text-[14px] leading-none font-semibold">Tags & automatic rules</h3>
+          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
+            Sonic assigns basic category tags automatically. Manage available tags and destination rules here; removing a tag also removes it from existing assignments.
+          </p>
+          <Button type="button" variant="secondary" size="sm" className="self-start" onClick={() => setTagsRulesOpen(true)}>
+            <Tags data-icon="inline-start" /> Manage tags & rules
+          </Button>
+        </section>
+
         <section
-          aria-labelledby="language-setting-title"
+          aria-labelledby="completion-notifications-title"
           className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3"
         >
           <h3
-            id="language-setting-title"
+            id="completion-notifications-title"
             className="font-sans text-[14px] leading-none font-semibold"
           >
-            {t('language')}
+            Download notifications
           </h3>
-          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            {t('languageDescription')}
-          </p>
-          <label htmlFor="sonic-language" className="text-sm">
-            {t('language')}
+          <label className="flex items-center justify-between gap-4 text-sm">
+            Show completion notifications
+            <input
+              aria-label="Show completion notifications"
+              type="checkbox"
+              checked={draft.completionAction !== 'none'}
+              onChange={(event) => {
+                const enabled = event.currentTarget.checked
+                setDraft((previous) => ({
+                  ...previous,
+                  completionAction: enabled ? 'notify' : 'none'
+                }))
+              }}
+            />
           </label>
+          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
+            Show a Sonic-themed notification when a download finishes, even when Sonic is minimized
+            or hidden in the system tray. Select Open to launch a recognized installer or reveal an
+            ordinary file in its folder. Your choice is saved when you press Save.
+          </p>
+        </section>
+        <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
+          <h3 className="font-sans text-[14px] leading-none font-semibold">Speed display units</h3>
+          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
+            Choose the magnitude shown in the main window. Use its bottom-right switch to display
+            bytes per second or bits per second.
+          </p>
           <select
-            id="sonic-language"
-            value={locale}
-            onChange={(event) => setLocale(event.target.value === 'ur' ? 'ur' : 'en')}
-            className="min-h-10 rounded-md border border-input bg-background px-3 text-foreground"
+            aria-label="Speed display magnitude"
+            value={speedMagnitude}
+            onChange={(event) => setSpeedMagnitude(event.currentTarget.value as 'KB' | 'MB' | 'GB')}
+            className="h-10 rounded-md border border-input bg-background px-3 text-foreground"
           >
-            <option value="en">{t('english')}</option>
-            <option value="ur">{t('urdu')}</option>
+            <option value="KB">KB</option>
+            <option value="MB">MB</option>
+            <option value="GB">GB</option>
           </select>
         </section>
-        <section
-          aria-labelledby="accessibility-setting-title"
-          className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3"
-        >
-          <h3
-            id="accessibility-setting-title"
-            className="font-sans text-[14px] leading-none font-semibold"
-          >
-            {t('accessibility')}
+        <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
+          <h3 className="font-sans text-[14px] leading-none font-semibold">
+            Slow mode speed limit
           </h3>
           <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            {t('accessibilityDescription')}
+            Set the maximum combined download speed used when Slow mode is switched on from the main
+            window. This limit applies across downloads and networks.
+          </p>
+          <label htmlFor="sonic-slow-mode-limit" className="text-sm">
+            Maximum download speed
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="sonic-slow-mode-limit"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
+              value={slowModeLimit}
+              onChange={(event) => {
+                const value = event.currentTarget.value
+                setSlowModeLimit(value)
+                const rate = Number(value) * 1024 * 1024
+                if (
+                  Number.isInteger(Number(value)) &&
+                  Number.isFinite(rate) &&
+                  rate >= 1024 * 1024 &&
+                  rate <= Number.MAX_SAFE_INTEGER
+                ) {
+                  setDraft((previous) => ({ ...previous, slowModeSpeed: Math.round(rate) }))
+                }
+              }}
+              className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-foreground"
+              aria-describedby="sonic-slow-mode-help"
+            />
+            <span className="flex h-10 items-center rounded-md border border-input bg-muted px-3 text-sm">
+              MB/s
+            </span>
+          </div>
+          <p id="sonic-slow-mode-help" className="text-xs text-muted-foreground">
+            Slow mode is only a toggle in the main window; change its speed here.
           </p>
         </section>
         <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
@@ -275,29 +421,7 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
             at the same time
           </div>
         </section>
-        <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
-          <h3 className="font-sans text-[14px] leading-none font-semibold">
-            When a download finishes
-          </h3>
-          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            Choose whether Sonic should notify you or open the completed file. Opening is opt-in.
-          </p>
-          <select
-            aria-label="Completion action"
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={draft.completionAction}
-            onChange={(event) =>
-              setDraft((previous) => ({
-                ...previous,
-                completionAction: event.currentTarget.value as 'none' | 'notify' | 'open'
-              }))
-            }
-          >
-            <option value="none">No action</option>
-            <option value="notify">Show a notification</option>
-            <option value="open">Open the completed file</option>
-          </select>
-        </section>
+
         <ScheduleFields
           schedule={draft.downloadSchedule ?? DEFAULT_DOWNLOAD_SCHEDULE}
           onChange={(downloadSchedule: DownloadSchedule) =>
@@ -306,35 +430,35 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
         />
         <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
           <h3 className="font-sans text-[14px] leading-none font-semibold">Software updates</h3>
-          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            Check the latest stable public GitHub release. Enter Sonic&apos;s official
-            publisher/repository as owner/repository. This check does not silently install or
-            restart the app.
-          </p>
-          <label htmlFor="sonic-update-repository" className="text-sm">
-            Official GitHub repository
+          <label className="flex items-center justify-between text-sm">
+            Automatic software updates{' '}
+            <input
+              type="checkbox"
+              checked={autoUpdateEnabled}
+              onChange={(event) => {
+                const enabled = event.currentTarget.checked
+                setAutoUpdateEnabled(enabled)
+                void window.sonic
+                  .updateSettings({ autoUpdateEnabled: enabled })
+                  .then(() => useAppStore.setState({ autoUpdateEnabled: enabled }))
+              }}
+            />
           </label>
-          <input
-            id="sonic-update-repository"
-            value={updateRepository}
-            onChange={(event) => setUpdateRepository(event.currentTarget.value)}
-            placeholder="owner/repository"
-            autoComplete="off"
-            spellCheck={false}
-            className="min-h-10 rounded-md border border-input bg-background px-3 font-mono text-xs text-foreground"
-          />
+          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
+            Automatically check for updates while Sonic is running, or disable automatic updates and
+            check manually here.
+          </p>
+
           <Button
             type="button"
             size="sm"
             variant="secondary"
-            disabled={updateBusy || !updateRepository.trim()}
+            disabled={updateBusy}
             onClick={() => {
               setUpdateBusy(true)
               setUpdateResult(null)
               void window.sonic
-                .updateSettings({ updateRepository: updateRepository.trim() })
-                .then(() => useAppStore.setState({ updateRepository: updateRepository.trim() }))
-                .then(() => window.sonic.checkForUpdate(updateRepository))
+                .checkForUpdate(updateRepository)
                 .then(setUpdateResult)
                 .catch((cause: unknown) =>
                   setUpdateResult({
@@ -346,7 +470,7 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
                 .finally(() => setUpdateBusy(false))
             }}
           >
-            {updateBusy ? 'Checking?' : 'Check for updates'}
+            {updateBusy ? 'Checkingâ€¦' : 'Check for updates'}
           </Button>
           {updateResult && (
             <div role="status" className="break-words text-xs text-muted-foreground">
@@ -410,7 +534,7 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
                     }}
                   >
                     {updateDownloadBusy
-                      ? 'Downloading and verifying?'
+                      ? 'Downloading and verifyingâ€¦'
                       : 'Download and verify installer'}
                   </Button>
                 </div>
@@ -455,224 +579,12 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
           )}
         </section>
         <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
-          <h3 className="font-sans text-[14px] leading-none font-semibold">
-            File integrity verification
-          </h3>
-          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            Compare a file against a SHA-256 digest obtained independently from a trusted publisher.
-            A match confirms integrity relative to that digest; it does not by itself prove who
-            published the file.
-          </p>
-          <label htmlFor="sonic-expected-sha256" className="text-sm">
-            Expected SHA-256
-          </label>
-          <input
-            id="sonic-expected-sha256"
-            value={expectedSha256}
-            onChange={(event) => setExpectedSha256(event.currentTarget.value)}
-            placeholder="64 hexadecimal characters"
-            autoComplete="off"
-            spellCheck={false}
-            className="min-h-10 rounded-md border border-input bg-background px-3 font-mono text-xs text-foreground"
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={integrityBusy || !expectedSha256.trim()}
-            onClick={() => {
-              setIntegrityBusy(true)
-              setIntegrityMessage(null)
-              void window.sonic
-                .verifyFileSha256(expectedSha256)
-                .then((result) => {
-                  if (result.cancelled) setIntegrityMessage('Verification cancelled.')
-                  else
-                    setIntegrityMessage(
-                      (result.ok ? 'MATCH' : 'MISMATCH') +
-                        ' ? ' +
-                        result.fileName +
-                        '. SHA-256: ' +
-                        result.actual +
-                        '. ' +
-                        (result.ok
-                          ? 'Integrity matches; publisher authenticity is not established by this comparison.'
-                          : 'Do not use this file unless the mismatch is resolved.')
-                    )
-                })
-                .catch((cause: unknown) => setIntegrityMessage(describeError(cause)))
-                .finally(() => setIntegrityBusy(false))
-            }}
-          >
-            {integrityBusy ? 'Verifying?' : 'Choose file and verify'}
-          </Button>
-          {integrityMessage && (
-            <p role="status" className="break-words text-xs text-muted-foreground">
-              {integrityMessage}
-            </p>
-          )}
-        </section>
-        <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
-          <h3 className="font-sans text-[14px] leading-none font-semibold">
-            Trusted publisher verification
-          </h3>
-          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            Pin an Ed25519 public key only after obtaining its SHA-256 fingerprint through an
-            independent trusted channel. A key copied from the same release page is not an
-            independent trust anchor.
-          </p>
-          <label htmlFor="sonic-publisher-key" className="text-sm">
-            Publisher Ed25519 public key (PEM)
-          </label>
-          <textarea
-            id="sonic-publisher-key"
-            value={publisherPublicKeyPem}
-            onChange={(event) => setPublisherPublicKeyPem(event.currentTarget.value)}
-            rows={4}
-            spellCheck={false}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground"
-            placeholder="-----BEGIN PUBLIC KEY-----"
-          />
-          <label htmlFor="sonic-publisher-fingerprint" className="text-sm">
-            Independently verified SHA-256 fingerprint
-          </label>
-          <input
-            id="sonic-publisher-fingerprint"
-            value={expectedPublisherFingerprint}
-            onChange={(event) => setExpectedPublisherFingerprint(event.currentTarget.value)}
-            placeholder="64 hexadecimal characters"
-            autoComplete="off"
-            spellCheck={false}
-            className="min-h-10 rounded-md border border-input bg-background px-3 font-mono text-xs text-foreground"
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={
-                publisherBusy ||
-                !publisherPublicKeyPem.trim() ||
-                !expectedPublisherFingerprint.trim()
-              }
-              onClick={() => {
-                setPublisherBusy(true)
-                setPublisherTrustMessage(null)
-                void window.sonic
-                  .fingerprintPublisherKey(publisherPublicKeyPem)
-                  .then(async (fingerprint) => {
-                    if (fingerprint !== expectedPublisherFingerprint.trim().toLowerCase())
-                      throw new Error('Fingerprint mismatch. The key was not pinned.')
-                    const patch: AppSettings = {
-                      publisherPublicKeyPem,
-                      publisherKeyFingerprint: fingerprint
-                    }
-                    await window.sonic.updateSettings(patch)
-                    useAppStore.setState(patch)
-                    setPublisherKeyFingerprint(fingerprint)
-                    setExpectedPublisherFingerprint(fingerprint)
-                    setPublisherTrustMessage('Publisher key pinned. Fingerprint: ' + fingerprint)
-                  })
-                  .catch((cause: unknown) => setPublisherTrustMessage(describeError(cause)))
-                  .finally(() => setPublisherBusy(false))
-              }}
-            >
-              {publisherBusy ? 'Verifying?' : 'Verify fingerprint and pin key'}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={publisherBusy || !publisherKeyFingerprint}
-              onClick={() => {
-                const patch: AppSettings = {
-                  publisherPublicKeyPem: undefined,
-                  publisherKeyFingerprint: undefined
-                }
-                void window.sonic
-                  .updateSettings(patch)
-                  .then(() => {
-                    useAppStore.setState(patch)
-                    setPublisherPublicKeyPem('')
-                    setPublisherKeyFingerprint('')
-                    setExpectedPublisherFingerprint('')
-                    setPublisherTrustMessage('Pinned publisher key cleared.')
-                  })
-                  .catch((cause: unknown) => setPublisherTrustMessage(describeError(cause)))
-              }}
-            >
-              Clear pinned key
-            </Button>
-          </div>
-          {publisherKeyFingerprint && (
-            <p className="break-all text-xs text-muted-foreground">
-              Pinned fingerprint: {publisherKeyFingerprint}
-            </p>
-          )}
-          <label htmlFor="sonic-signed-manifest" className="text-sm">
-            Detached signed manifest JSON
-          </label>
-          <textarea
-            id="sonic-signed-manifest"
-            value={signedManifestJson}
-            onChange={(event) => setSignedManifestJson(event.currentTarget.value)}
-            rows={4}
-            spellCheck={false}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground"
-            placeholder="{ payload, signature, keyId }"
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={publisherBusy || !publisherKeyFingerprint || !signedManifestJson.trim()}
-            onClick={() => {
-              setPublisherBusy(true)
-              setPublisherTrustMessage(null)
-              void window.sonic
-                .verifyPublisherManifest(
-                  signedManifestJson,
-                  publisherPublicKeyPem,
-                  publisherKeyFingerprint
-                )
-                .then((result) =>
-                  setPublisherTrustMessage(
-                    'VALID SIGNATURE. Pinned publisher fingerprint: ' +
-                      result.publicKeyFingerprint +
-                      (result.keyId ? '. Key ID: ' + result.keyId : '') +
-                      '. Signed payload: ' +
-                      result.payload
-                  )
-                )
-                .catch((cause: unknown) =>
-                  setPublisherTrustMessage('NOT VERIFIED: ' + describeError(cause))
-                )
-                .finally(() => setPublisherBusy(false))
-            }}
-          >
-            Verify signed manifest
-          </Button>
-          {publisherTrustMessage && (
-            <p role="status" className="break-all text-xs text-muted-foreground">
-              {publisherTrustMessage}
-            </p>
-          )}
-        </section>
-        <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
           <h3 className="font-sans text-[14px] leading-none font-semibold">{t('backupStorage')}</h3>
           <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            Backups include settings, history, queue/torrent metadata, and media manifests, not the
-            downloaded file contents. Some saved task metadata may contain encrypted browser-session
-            data that only decrypts on this Windows account. Portable mode copies app data to an
-            empty, writable folder and restarts Sonic. Removable drives can disconnect; permission
-            problems can prevent Sonic from starting or saving, and drive failure can lose data.
-            Keep a separate backup and do not use a shared folder you do not trust.
+            Export settings separately from download history. Settings backups contain Sonic preferences; history backups contain finished-download records. Older full Sonic backups can also be restored, including saved queue metadata. Keep backups in a trusted location.
           </p>
           <p className="break-all text-xs text-muted-foreground">
-            {storageInfo
-              ? (storageInfo.portable ? 'Portable storage: ' : 'Storage: ') +
-                storageInfo.userDataDir
-              : 'Checking storage locationâ€¦'}
+            {storageInfo ? 'Storage: ' + storageInfo.userDataDir : 'Checking storage location…'}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -680,7 +592,7 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
               variant="secondary"
               size="sm"
               disabled={storageBusy}
-              onClick={() => void runStorageAction('export')}
+              onClick={() => { setExportChoiceOpen((open) => !open); setStorageMessage(null) }}
             >
               {t('exportBackup')}
             </Button>
@@ -691,18 +603,25 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
               disabled={storageBusy}
               onClick={() => void runStorageAction('restore')}
             >
-              {t('restoreBackup')}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={storageBusy || Boolean(storageInfo?.portable)}
-              onClick={() => void runStorageAction('portable')}
-            >
-              Choose portable folder
+              {storageBusy ? 'Restoring…' : t('restoreBackup')}
             </Button>
           </div>
+          {exportChoiceOpen && (
+            <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+              <p className="text-sm font-medium">What would you like to export?</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="secondary" disabled={storageBusy} onClick={() => void runStorageAction('export', 'settings')}>
+                  Export settings
+                </Button>
+                <Button type="button" size="sm" variant="secondary" disabled={storageBusy} onClick={() => void runStorageAction('export', 'history')}>
+                  Export download history
+                </Button>
+                <Button type="button" size="sm" variant="ghost" disabled={storageBusy} onClick={() => setExportChoiceOpen(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
           {storageMessage && (
             <p role="status" className="text-xs text-muted-foreground">
               {storageMessage}
@@ -710,9 +629,20 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
           )}
         </section>
         <PerformanceDiagnostics />
-        `r`n <RemoteControlSettings />
-        <PluginManagement />
+        <RemoteControlSettings />
+        <div id="plugin-management-section">
+          <PluginManagement />
+        </div>
         <div className="flex flex-wrap items-center gap-2 border-t-[0.5px] border-border pt-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={clearingHistory}
+            onClick={() => setConfirmClearHistory(true)}
+          >
+            Clear history
+          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -724,6 +654,9 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
           </Button>
         </div>
       </fieldset>
+      {tagsRulesOpen && (
+        <DownloadOrganizationDialog open={true} onOpenChange={setTagsRulesOpen} selectedIds={[]} />
+      )}
       {(!valid || error) && (
         <div className="px-4 pb-2">
           <Alert variant="destructive">
@@ -741,13 +674,46 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
           {saving ? t('saving') : t('save')}
         </Button>
       </div>
+      <AlertDialog
+        open={confirmClearHistory}
+        onOpenChange={(open) => !clearingHistory && setConfirmClearHistory(open)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear download history?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently clears saved download history. Downloaded files are not deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearingHistory}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={clearingHistory}
+              onClick={(event) => {
+                event.preventDefault()
+                setClearingHistory(true)
+                void window.sonic
+                  .clearHistory()
+                  .then(() => {
+                    useAppStore.setState({ history: [] })
+                    setConfirmClearHistory(false)
+                  })
+                  .catch((cause: unknown) => setError(describeError(cause)))
+                  .finally(() => setClearingHistory(false))
+              }}
+            >
+              {clearingHistory ? 'Clearingâ€¦' : 'Clear history'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reset settings to defaults?</AlertDialogTitle>
             <AlertDialogDescription>
-              This resets downloads at once and disables the download schedule. Other app settings
-              are not changed.
+              This resets downloads at once, the slow mode speed limit, and disables the download
+              schedule. Other app settings are not changed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

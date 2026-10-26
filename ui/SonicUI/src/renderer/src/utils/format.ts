@@ -30,6 +30,14 @@ const BIT_UNITS = ['bps', 'Kbps', 'Mbps', 'Gbps', 'Tbps']
 
 /** Bits count in thousands, as internet plans and speed tests do — not the 1024s of formatBytes. */
 export function formatSpeed(bytesPerSec: number, unit: SpeedUnit): string {
+  if (['KB/s', 'MB/s', 'GB/s', 'KBps', 'MBps', 'GBps'].includes(unit)) {
+    const scale = unit.startsWith('KB') ? 1024 : unit.startsWith('MB') ? 1024 ** 2 : 1024 ** 3
+    const rate = unit.endsWith('ps') ? bytesPerSec * 8 : bytesPerSec
+    const value = Number.isFinite(rate) && rate > 0 ? rate / scale : 0
+    const suffix = unit.endsWith('ps') ? 'ps' : '/s'
+    const magnitude = unit.startsWith('KB') ? 'KB' : unit.startsWith('MB') ? 'MB' : 'GB'
+    return `${value >= 100 ? Math.round(value) : value >= 10 ? value.toFixed(1) : value.toFixed(2)} ${magnitude}${suffix}`
+  }
   if (unit === 'bytes') return `${formatBytes(bytesPerSec)}/s`
   const bits = Number.isFinite(bytesPerSec) && bytesPerSec > 0 ? bytesPerSec * 8 : 0
   let exponent = bits < 1 ? 0 : Math.min(Math.floor(Math.log10(bits) / 3), BIT_UNITS.length - 1)
@@ -49,6 +57,9 @@ const SPEED_UNIT_BYTES: Record<string, number> = {
   'KB/s': 1024,
   'MB/s': 1024 ** 2,
   'GB/s': 1024 ** 3,
+  KBps: 1024,
+  MBps: 1024 ** 2,
+  GBps: 1024 ** 3,
   'TB/s': 1024 ** 4,
   bps: 1 / 8,
   Kbps: 1e3 / 8,

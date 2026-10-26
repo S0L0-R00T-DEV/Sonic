@@ -27,7 +27,7 @@ interface AppStore {
   interfaces: NetworkInterfaceInfo[]
   interfacesStatus: LoadStatus
   interfacesError: string | null
-  /** User customizations (name/color) per network interface id â€” persisted in the main process. */
+  /** User customizations (name/color) per network interface id — persisted in the main process. */
   networkPreferences: NetworkPreferences
 
   /** Persisted in the main process alongside nativeTheme.themeSource. */
@@ -36,7 +36,7 @@ interface AppStore {
   homeDir: string
   downloadsDir: string
 
-  /** Every download that isn't finished, by id â€” running, queued, paused or failed. */
+  /** Every download that isn't finished, by id — running, queued, paused or failed. */
   downloads: Record<string, DownloadState>
   /** Finished downloads, newest first (see main/download/history.ts). */
   history: FinishedDownload[]
@@ -47,13 +47,11 @@ interface AppStore {
   completionAction: CompletionAction
   /** The New download dialog, over whatever the window shows. */
   newDownloadOpen: boolean
-  /** Persisted â€” how many downloads run at once; the rest wait in the queue. */
+  /** Persisted — how many downloads run at once; the rest wait in the queue. */
   downloadsAtOnce: number
-  /** Persisted â€” the speed limits (see AppSettings). */
-  speedLimit: number | undefined
   slowMode: boolean
   slowModeSpeed: number
-  /** Persisted â€” MB/s or Mbps, for every speed shown. */
+  /** Persisted — MB/s or Mbps, for every speed shown. */
   speedUnit: SpeedUnit
 
   /** Lifted out of the Idle screen so it survives a swap to/from the No-connections screen. */
@@ -67,7 +65,7 @@ interface AppStore {
   formKey: number
   /** The link last started: still on the clipboard afterwards, so not offered again. */
   startedUrl: string
-  /** Persisted â€” the last folder picked, falling back to downloadsDir. */
+  /** Persisted — the last folder picked, falling back to downloadsDir. */
   destinationDir: string
   customTags: string[]
   downloadTags: Record<string, string[]>
@@ -75,6 +73,7 @@ interface AppStore {
   publisherPublicKeyPem?: string
   publisherKeyFingerprint?: string
   updateRepository?: string
+  autoUpdateEnabled: boolean
 
   /** Asks the main process for the network list now; it also pushes every change. */
   loadInterfaces: () => Promise<void>
@@ -98,8 +97,7 @@ interface AppStore {
   /** Leaves what New download shows alone, the typed link included. */
   dropLink: (id: string, started: boolean) => void
   setDownloadsAtOnce: (count: number) => void
-  /** Each one applies at once, to every download (see main/network/limits.ts). */
-  setSpeedLimit: (bytesPerSec: number | undefined) => void
+  /** Enable or disable the configured global slow-mode cap. */
   setSlowMode: (on: boolean) => void
   setSlowModeSpeed: (bytesPerSec: number) => void
   setSpeedUnit: (unit: SpeedUnit) => void
@@ -113,8 +111,31 @@ interface AppStore {
 // Settings saved by the main process, read once before the first paint (see InitialState).
 const initial = window.sonic.initialState
 
+function automaticCategoryTag(
+  fileName: string,
+  url: string,
+  availableTags: string[]
+): string | null {
+  const name = fileName.toLowerCase()
+  const source = url.toLowerCase()
+  const extension = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
+  const groups: Array<[string, RegExp]> = [
+    ['Games', /\b(game|games|steam|epicgames|gog|itch\.io)\b/],
+    ['Archives', /^(zip|7z|rar|tar|gz|bz2|xz|iso|cab|arj)$/i],
+    ['Media', /^(mp4|mkv|mov|avi|webm|mp3|wav|flac|aac|ogg|jpg|jpeg|png|gif|webp|bmp|svg)$/i],
+    ['Documents', /^(pdf|doc|docx|odt|rtf|txt|md|csv|xls|xlsx|ppt|pptx|epub)$/i],
+    ['Software', /^(exe|msi|msix|appx|dmg|pkg|deb|rpm|apk|appimage)$/i]
+  ]
+  const byName = groups.find(
+    ([tag, pattern]) =>
+      availableTags.includes(tag) && pattern.test(tag === 'Games' ? `${name} ${source}` : extension)
+  )
+  if (byName) return byName[0]
+  return availableTags.includes('Other') ? 'Other' : null
+}
+
 /** Every setting changes optimistically: the store is updated first so the UI feels instant,
- * then this saves it. The store stays the source of truth either way â€” a failed save just means
+ * then this saves it. The store stays the source of truth either way — a failed save just means
  * the change isn't remembered next launch. */
 function persist(patch: AppSettings): void {
   window.sonic.updateSettings(patch).catch(() => {})
@@ -142,7 +163,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   completionAction: initial.completionAction ?? 'notify',
   newDownloadOpen: false,
   downloadsAtOnce: initial.downloadsAtOnce,
-  speedLimit: initial.speedLimit,
   slowMode: initial.slowMode,
   slowModeSpeed: initial.slowModeSpeed,
   speedUnit: initial.speedUnit,
@@ -159,6 +179,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   publisherPublicKeyPem: initial.publisherPublicKeyPem,
   publisherKeyFingerprint: initial.publisherKeyFingerprint,
   updateRepository: initial.updateRepository,
+  autoUpdateEnabled: initial.autoUpdateEnabled ?? true,
 
   loadInterfaces: async () => {
     // A re-scan keeps showing the last result rather than flashing back to 'loading'.
@@ -193,13 +214,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   receiveDownloadUpdate: (update) => {
-    const { downloads, history } = get()
+    const { downloads, history, downloadTags, customTags } = get()
     // Finished already: an update that arrives late mustn't bring it back.
     if (history.some((entry) => entry.id === update.state.id)) return
     const previous = downloads[update.state.id] ?? null
     const download = applyDownloadUpdate(previous, update)
     if (!download || download === previous) return
-    set({ downloads: { ...downloads, [download.id]: download } })
+    const patch: Partial<AppStore> = { downloads: { ...downloads, [download.id]: download } }
+    if (!downloadTags[download.id]?.length) {
+      const tag = automaticCategoryTag(download.fileName, download.url, customTags)
+      if (tag) {
+        const nextTags = { ...downloadTags, [download.id]: [tag] }
+        patch.downloadTags = nextTags
+        void window.sonic.updateSettings({ downloadTags: nextTags }).catch(() => {})
+      }
+    }
+    set(patch)
   },
 
   receiveHistory: (history) => {
@@ -211,7 +241,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   forgetDownload: (id) => {
     const { [id]: removed, ...downloads } = get().downloads
     void removed
-    set({ downloads, history: get().history.filter((entry) => entry.id !== id) })
+    const history = get().history.map((entry) =>
+      entry.id === id ? { ...entry, removedAt: entry.removedAt ?? Date.now() } : entry
+    )
+    set({ downloads, history })
   },
 
   setView: (view) => set({ view }),
@@ -266,11 +299,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setDownloadsAtOnce: (downloadsAtOnce) => {
     set({ downloadsAtOnce })
     persist({ downloadsAtOnce })
-  },
-
-  setSpeedLimit: (speedLimit) => {
-    set({ speedLimit })
-    persist({ speedLimit })
   },
 
   setSlowMode: (slowMode) => {

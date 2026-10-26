@@ -14,7 +14,7 @@ import type {
 
 /** The request/response half of the IPC surface (every IpcChannels entry except the
  * main->renderer push events, downloadUpdated, networksChanged, historyChanged, linkReceived and
- * updateStateChanged) Ã¢â‚¬â€ one source of truth for
+ * updateStateChanged) — one source of truth for
  * both sonicApi (preload) and registerIpcHandlers (main), so a signature drift between the two
  * is a compile error instead of a runtime one. */
 export interface IpcContract {
@@ -24,6 +24,18 @@ export interface IpcContract {
   listInterfaces: { args: []; result: NetworkInterfaceInfo[] }
   deviceBindingSupported: { args: []; result: boolean }
   openNetworkSettings: { args: []; result: void }
+  openBrowserExtensionPage: {
+    args: [browserId: 'firefox']
+    result: { opened: boolean; error?: string }
+  }
+  copyBrowserExtensionFolderPath: {
+    args: [browserId: 'firefox']
+    result: { copied: boolean; path?: string; error?: string }
+  }
+  copyChromiumExtensionFolderPath: {
+    args: []
+    result: { copied: boolean; path?: string; error?: string }
+  }
   updateSettings: { args: [patch: AppSettings]; result: void }
   probeUrl: { args: [url: string]; result: ProbeResult }
   checkForUpdate: {
@@ -121,7 +133,7 @@ export interface IpcContract {
   reviewPluginManifest: { args: [manifestJson: string]; result: PluginReview }
   trustPluginKey: { args: [keyId: string, publicKeyPem: string]; result: void }
   revokePluginKey: { args: [keyId: string]; result: void }
-  installPlugin: { args: [manifestJson: string]; result: PluginSummary }
+  installPlugin: { args: []; result: PluginSummary | null }
   setPluginPermissions: {
     args: [pluginId: string, permissions: SonicPluginPermission[]]
     result: PluginSummary
@@ -158,18 +170,22 @@ export interface IpcContract {
   dismissLink: { args: [id: string]; result: void }
   /** Saves a privacy-sanitized JSON diagnostic report using a native user-selected path. */
   saveDiagnosticReport: { args: [content: string]; result: boolean }
-  exportStorageBackup: { args: []; result: boolean }
+  exportStorageBackup: { args: [kind: 'settings' | 'history']; result: boolean }
   restoreStorageBackup: {
     args: []
-    result: {
-      settingsRestored: boolean
-      historyEntries: number
-      tasksRestored: number
-      mediaTasksRestored: number
-    } | null
+    result:
+      | { kind: 'history'; historyEntries: number }
+      | { kind: 'settings'; settingsRestored: boolean }
+      | {
+          kind: 'sonic'
+          settingsRestored: boolean
+          historyEntries: number
+          tasksRestored: number
+          mediaTasksRestored: number
+        }
+      | null
   }
-  configurePortableStorage: { args: []; result: string | null }
-  getStorageInfo: { args: []; result: { userDataDir: string; portable: boolean } }
+  getStorageInfo: { args: []; result: { userDataDir: string } }
   remoteControlState: { args: []; result: import('./types').RemoteControlState }
   enableRemoteControl: { args: [interfaceId: string]; result: import('./types').RemoteControlState }
   disableRemoteControl: { args: []; result: void }

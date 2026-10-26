@@ -38,28 +38,53 @@ export function useNewDownloadShortcuts(): void {
       event.preventDefault()
       openNewDownload()
     }
-    // Never let a drop navigate the window to what was dropped.
-    const onDragOver = (event: DragEvent): void => event.preventDefault()
-    const onDrop = (event: DragEvent): void => {
+    // Handle drops at the window capture phase so a .torrent works anywhere, including title-bar
+    // edges and empty-state corners, before any child component can consume the event.
+    const acceptExternalDrop = (event: DragEvent): void => {
+      // On Windows, Explorer may not populate DataTransfer.files/types until late in the drag.
+      // Accept dragenter AND dragover unconditionally so Chromium marks the window as a valid
+      // native drop target instead of showing the prohibited/unavailable cursor.
       event.preventDefault()
-      const file = event.dataTransfer?.files[0]
-      const link = file
-        ? /\.torrent$/i.test(file.name)
-          ? window.sonic.pathForFile(file)
-          : null
-        : acceptedLink(event.dataTransfer?.getData('text') ?? '')
-      if (link) openNewDownload(link)
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const onDrop = (event: DragEvent): void => {
+      // Always cancel the native default; only recognized torrent files and links are imported.
+      event.preventDefault()
+      const transfer = event.dataTransfer
+      if (!transfer) return
+      const file = Array.from(transfer.files).find((candidate) => /\.torrent$/i.test(candidate.name))
+      if (file) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        const path = window.sonic.pathForFile(file)
+        if (path) openNewDownload(path)
+        return
+      }
+      const text = [transfer.getData('text/uri-list'), transfer.getData('text/plain'), transfer.getData('text')]
+        .flatMap((value) => value.split(/\r?\n/))
+        .map((value) => value.trim())
+        .find((value) => value && !value.startsWith('#') && acceptedLink(value) !== null)
+      if (text) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        openNewDownload(acceptedLink(text) ?? text)
+      } else {
+        // Prevent Electron from navigating to a dropped file or URL.
+        event.preventDefault()
+      }
     }
 
     window.addEventListener('paste', onPaste)
     window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('dragover', onDragOver)
-    window.addEventListener('drop', onDrop)
+    window.addEventListener('dragenter', acceptExternalDrop, true)
+    window.addEventListener('dragover', acceptExternalDrop, true)
+    window.addEventListener('drop', onDrop, true)
     return () => {
       window.removeEventListener('paste', onPaste)
       window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('dragover', onDragOver)
-      window.removeEventListener('drop', onDrop)
+      window.removeEventListener('dragenter', acceptExternalDrop, true)
+      window.removeEventListener('dragover', acceptExternalDrop, true)
+      window.removeEventListener('drop', onDrop, true)
     }
   }, [openNewDownload])
 }

@@ -24,6 +24,14 @@ type RegistryState = {
   plugins: PluginRecord[]
 }
 const emptyState = (): RegistryState => ({ version: 1, trustedKeys: {}, plugins: [] })
+const BUILTIN_PLUGIN_KEY_ID = 'sonic-project-plugins-2026'
+const BUILTIN_PLUGIN_KEY_DER_BASE64 = 'MCowBQYDK2VwAyEA5WK8pXdvT85G8fsXRqFYH//avXTSzoTryJHYuHXnpsQ='
+const BUILTIN_PLUGIN_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----\n${BUILTIN_PLUGIN_KEY_DER_BASE64}\n-----END PUBLIC KEY-----\n`
+const firstRunState = (): RegistryState => ({
+  version: 1,
+  trustedKeys: { [BUILTIN_PLUGIN_KEY_ID]: BUILTIN_PLUGIN_PUBLIC_KEY },
+  plugins: []
+})
 const keyIdPattern = /^[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?$/
 
 function parseJson(input: string): unknown {
@@ -92,13 +100,17 @@ export class PluginRegistry {
       }
       this.state = { version: 1, trustedKeys, plugins }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        // Seed the project-owned public key only on a genuinely new profile. An existing
+        // registry that is malformed or unreadable must fail closed without silently restoring trust.
+        this.state = firstRunState()
+      } else {
         console.error(
           '[Sonic plugins] registry could not be loaded; starting with an empty, fail-closed registry.',
           error
         )
+        this.state = emptyState()
       }
-      this.state = emptyState()
     }
   }
 

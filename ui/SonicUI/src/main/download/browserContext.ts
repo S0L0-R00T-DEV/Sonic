@@ -1,11 +1,18 @@
 import type { BrowserContext, BrowserCookie } from '../../shared/types'
 
-const USER_AGENT = 'Speed-o-Freq-Sonic/1.0'
+// Use a conventional browser identity for public download hosts that reject unknown client UAs.
+// Browser cookies and referer are still supplied only when an importing browser provides them.
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
 /** Called again for every redirect, so a site's session cookie never reaches the next host (its
  * CDN), while a cookie set for a whole domain still follows a hop within it. */
 export function requestHeaders(url: URL, browser?: BrowserContext): Record<string, string> {
-  const headers: Record<string, string> = { 'User-Agent': browser?.userAgent ?? USER_AGENT }
+  const headers: Record<string, string> = {
+    'User-Agent': browser?.userAgent ?? USER_AGENT,
+    Accept: '*/*',
+    'Accept-Language': 'en-US,en;q=0.9'
+  }
   if (browser?.referer) headers['Referer'] = browser.referer
   const cookie = browser ? cookieHeader(url, browser.cookies) : ''
   if (cookie) headers['Cookie'] = cookie

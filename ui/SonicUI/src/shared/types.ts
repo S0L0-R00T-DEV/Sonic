@@ -42,7 +42,7 @@ export interface NetworkInterfaceInfo {
 
 interface ProbeResultBase {
   requestedUrl: string
-  /** URL after following redirects â€” this is what the download should actually fetch. */
+  /** URL after following redirects — this is what the download should actually fetch. */
   finalUrl: string
   supportsRanges: boolean
   /** null when the server did not report a size. */
@@ -148,7 +148,7 @@ export interface HttpStreamState {
   /** The block this stream is fetching. Unset whenever it holds none (idle, retrying, paused, done). */
   currentBlockIndex?: number
   /** True while this stream is racing another stream for `currentBlockIndex`, because that one
-   * was too slow â€” see main/download/scheduler.ts. Whichever finishes first wins. */
+   * was too slow — see main/download/scheduler.ts. Whichever finishes first wins. */
   hedge?: boolean
 }
 
@@ -176,7 +176,7 @@ interface WorkUnitState {
   rangeStart: number
   rangeEnd: number | null
   /** The network currently leasing this block (or the last one to touch it). Only meaningful
-   * as "who is working on it now" â€” for who actually *delivered* the bytes, read
+   * as "who is working on it now" — for who actually *delivered* the bytes, read
    * `bytesByInterface`, since a block can be started on one network and finished on another
    * after a retry or a pause/resume. */
   interfaceId?: string
@@ -344,6 +344,8 @@ export type FinishedDownload = (
   unitsWritten: number
   /** Set when listed: its file or folder is no longer where it was saved. */
   missing?: boolean
+  /** When the user removed this completed item from the main list; record remains in history. */
+  removedAt?: number
   /** Chosen torrent files relative to its destination folder, retained for safe file removal. */
   downloadedFiles?: string[]
   /** SHA-256 computed locally after publication; not a trusted publisher checksum. */
@@ -370,14 +372,14 @@ export interface TorrentDownloadUpdate {
 
 export type DownloadUpdate = HttpDownloadUpdate | TorrentDownloadUpdate
 
-/** User customization for one physical network, keyed by NetworkInterfaceInfo.id â€” lets a
+/** User customization for one physical network, keyed by NetworkInterfaceInfo.id — lets a
  * cryptic OS device name (e.g. "feth0") get a real label, and a color distinct from its
  * kind's default. Persisted in the main process, independent of any single download. */
 export type DataLimitPeriod = 'day' | 'week' | 'month'
 
 export interface NetworkPreference {
   customName?: string
-  /** One of the app's curated swatch ids (see NETWORK_COLOR_SWATCHES) â€” not a raw hex, so every
+  /** One of the app's curated swatch ids (see NETWORK_COLOR_SWATCHES) — not a raw hex, so every
    * swatch is guaranteed to have a legible on-solid text color already picked out for it. */
   colorId?: string
   /** Left out of the last download started, so New download starts without it too (it remembers
@@ -431,8 +433,7 @@ export interface AppSettings {
   networkPreferences?: NetworkPreferences
   /** How many downloads run at once; the rest wait in the queue. */
   downloadsAtOnce?: number
-  /** Bytes a second every download together may take, over every network; unset: no limit. */
-  speedLimit?: number
+
   /** While on, slowModeSpeed stands in for speedLimit: a one-click lower limit for calls. */
   slowMode?: boolean
   slowModeSpeed?: number
@@ -450,10 +451,11 @@ export interface AppSettings {
   publisherKeyFingerprint?: string
   /** Optional GitHub owner/repository for the release updater. */
   updateRepository?: string
+  autoUpdateEnabled?: boolean
 }
 
 /** bytes: MB/s. bits: Mbps, as internet plans and speed tests count them. */
-export type SpeedUnit = 'bytes' | 'bits'
+export type SpeedUnit = 'bytes' | 'bits' | 'KB/s' | 'MB/s' | 'GB/s' | 'KBps' | 'MBps' | 'GBps'
 
 export const DOWNLOADS_AT_ONCE = { default: 2, min: 1, max: 4 }
 /** Seconds of speed history a download keeps (a sample a second), and so the span the throughput
@@ -481,11 +483,10 @@ export interface InitialState {
   themeSource: ThemeSource
   networkPreferences: NetworkPreferences
   downloadsAtOnce: number
-  speedLimit?: number
   slowMode: boolean
   slowModeSpeed: number
   speedUnit: SpeedUnit
-  /** The last folder picked, if it still exists â€” otherwise the renderer uses downloadsDir. */
+  /** The last folder picked, if it still exists — otherwise the renderer uses downloadsDir. */
   destinationDir?: string
   customTags: string[]
   downloadTags: Record<string, string[]>
@@ -493,6 +494,7 @@ export interface InitialState {
   publisherPublicKeyPem?: string
   publisherKeyFingerprint?: string
   updateRepository?: string
+  autoUpdateEnabled?: boolean
 }
 
 interface StartDownloadRequestBase {

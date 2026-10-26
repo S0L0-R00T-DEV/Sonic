@@ -22,7 +22,7 @@ function assertNever(status: never): never {
   throw new Error(`Unhandled download status: ${String(status)}`)
 }
 
-/** One screen per download.status Ã¢â‚¬â€ a switch with an assertNever default so a new
+/** One screen per download.status — a switch with an assertNever default so a new
  * DownloadStatus value is a compile error here instead of silently falling into whichever branch
  * happened to be last. */
 function renderDownload(download: DownloadState | FinishedDownload): React.JSX.Element {
@@ -42,7 +42,7 @@ function renderDownload(download: DownloadState | FinishedDownload): React.JSX.E
   }
 }
 
-/** The download shown, or the list. Only this re-renders on a progress update Ã¢â‚¬â€ App, the title
+/** The download shown, or the list. Only this re-renders on a progress update — App, the title
  * bar, the status bar and the dialogs around it don't. */
 function CurrentScreen(): React.JSX.Element {
   // Just the one shown: an update to any other download leaves this selector's result alone.
@@ -89,9 +89,24 @@ function RecoveryIssuesBanner({ issues }: { issues: RecoveryIssue[] }): React.JS
 }
 function App(): React.JSX.Element {
   const themeSource = useAppStore((store) => store.themeSource)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem('sonic-browser-setup-prompted-v2') !== '1'
+    } catch {
+      return false
+    }
+  })
   const [recoveryIssues, setRecoveryIssues] = useState<RecoveryIssue[]>([])
   const [settingsPage, setSettingsPage] = useState<string | null>(null)
+  useEffect(() => {
+    if (!settingsOpen) return
+    try {
+      // First launch opens the browser setup instructions. Mark them seen so closing the dialog is respected.
+      window.localStorage.setItem('sonic-browser-setup-prompted-v2', '1')
+    } catch {
+      // A restricted storage environment must not prevent the app from launching.
+    }
+  }, [settingsOpen])
   useEffect(() => {
     let disposed = false
     void window.sonic
@@ -100,7 +115,7 @@ function App(): React.JSX.Element {
         if (!disposed) setRecoveryIssues(issues)
       })
       .catch((error: unknown) => {
-        console.error('[Speed-o-Freq Sonic] failed to load recovery issues', error)
+        console.error('[Sonic] failed to load recovery issues', error)
       })
     return () => {
       disposed = true
@@ -118,7 +133,6 @@ function App(): React.JSX.Element {
         completionAction: patch.completionAction ?? state.completionAction,
         networkPreferences: patch.networkPreferences ?? {},
         downloadsAtOnce: patch.downloadsAtOnce ?? 2,
-        speedLimit: patch.speedLimit,
         slowMode: patch.slowMode ?? false,
         slowModeSpeed: patch.slowModeSpeed ?? 2 * 1024 * 1024,
         speedUnit: patch.speedUnit ?? 'bytes',
@@ -131,43 +145,6 @@ function App(): React.JSX.Element {
     return unsubscribe
   }, [])
 
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>): void => {
-    const hasTorrent = Array.from(event.dataTransfer.items).some(
-      (item) => item.kind === 'file' || item.type === 'text/uri-list' || item.type === 'text/plain'
-    )
-    if (hasTorrent) event.preventDefault()
-  }
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>): void => {
-    const files = Array.from(event.dataTransfer.files)
-    const torrentFile = files.find((file) => file.name.toLowerCase().endsWith('.torrent'))
-    if (torrentFile) {
-      event.preventDefault()
-      const path = window.sonic.pathForFile(torrentFile)
-      if (path) useAppStore.getState().openNewDownload(path)
-      return
-    }
-    const droppedCandidates = [
-      event.dataTransfer.getData('text/uri-list'),
-      event.dataTransfer.getData('text/plain')
-    ]
-      .flatMap((text) => text.split(/\r?\n/))
-      .map((value) => value.trim())
-      .filter((value) => value && !value.startsWith('#'))
-    const droppedText = droppedCandidates.find((value) => {
-      if (/^magnet:\?/i.test(value)) return true
-      try {
-        const url = new URL(value)
-        return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password
-      } catch {
-        return false
-      }
-    })
-    if (droppedText) {
-      event.preventDefault()
-      useAppStore.getState().openNewDownload(droppedText)
-    }
-  }
-
   useDownloadEvents()
   useOpenedLinks()
   useNewDownloadShortcuts()
@@ -177,7 +154,7 @@ function App(): React.JSX.Element {
     <LocaleProvider>
       <TooltipProvider>
         <DownloadActionsProvider>
-          <div className="flex h-full flex-col" onDragOver={handleDragOver} onDrop={handleDrop}>
+          <div className="flex h-full flex-col">
             <TitleBar onOpenSettings={() => setSettingsOpen(true)} />
             <RecoveryIssuesBanner issues={recoveryIssues} />
             <div className="min-h-0 flex-1">

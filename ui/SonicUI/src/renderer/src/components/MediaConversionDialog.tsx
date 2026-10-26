@@ -154,7 +154,7 @@ export function MediaConversionDialog({
                 placeholder="Select ffmpeg.exe / ffmpeg"
               />
               <Button type="button" variant="outline" onClick={() => void chooseExecutable()}>
-                Browse?
+                Browse
               </Button>
             </div>
             {actualHash && (
@@ -233,7 +233,7 @@ export function MediaConversionDialog({
           )}
           {progress?.status === 'running' && (
             <p role="status" className="text-sm">
-              Converting? Keep Sonic open until it finishes.
+              Converting… Keep Sonic open until it finishes.
             </p>
           )}
           {progress?.status === 'completed' && (
@@ -277,7 +277,7 @@ export function MediaConversionDialog({
                 }
                 onClick={() => void start()}
               >
-                {busy ? 'Checking?' : 'Convert file'}
+                {busy ? 'Checking…' : 'Convert file'}
               </Button>
             )}
           </div>

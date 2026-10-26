@@ -136,12 +136,12 @@ static async Task<string> SendAsync(string json)
     catch (TimeoutException)
     {
         throw new InvalidOperationException(
-            "Could not connect to Speed-o'-Freq Sonic. Launch the app first, then rerun the CLI command.");
+            "Could not connect to Sonic. Launch the app first, then rerun the CLI command.");
     }
     catch (IOException ex)
     {
         throw new InvalidOperationException(
-            "Speed-o'-Freq Sonic CLI endpoint is unavailable. Launch the app first and make sure its window has finished loading.",
+            "Sonic CLI endpoint is unavailable. Launch the app first and make sure its window has finished loading.",
             ex);
     }
 
@@ -158,7 +158,7 @@ static async Task<string> SendAsync(string json)
 static void PrintHelp()
 {
     Console.WriteLine("""
-Speed-o'-Freq Sonic CLI — control the running desktop app.
+Sonic CLI — control the running desktop app.
 The GUI must be running. Commands return JSON; sizes/speeds are bytes unless otherwise indicated.
 
 DOWNLOADS

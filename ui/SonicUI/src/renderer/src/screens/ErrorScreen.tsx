@@ -28,7 +28,7 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
 
   // Deliberately omit URLs, raw errors, cookies and request headers: links may contain credentials.
   const diagnosticText = [
-    "Speed-o'-Freq Sonic diagnostic",
+    'Sonic diagnostic',
     `File: ${download.fileName}`,
     `Status: ${download.status}`,
     `Progress: ${download.bytesDownloaded} / ${download.totalBytes} bytes`,
@@ -44,7 +44,7 @@ export function ErrorScreen({ download }: { download: DownloadState }): React.JS
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     application: {
-      name: "Speed-o'-Freq Sonic",
+      name: 'Sonic',
       version: window.sonic.initialState.appVersion ?? 'unknown',
       platform: window.sonic.platform,
       electronVersion: window.sonic.initialState.electronVersion ?? 'unknown',

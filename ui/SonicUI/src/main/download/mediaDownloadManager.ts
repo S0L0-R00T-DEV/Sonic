@@ -2,7 +2,10 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join, basename } from 'node:path'
-import { app, Notification, shell, type BrowserWindow } from 'electron'
+import { app, shell, type BrowserWindow } from 'electron'
+import { showCompletionToast } from '../completionNotification'
+import { loadSettings } from '../settings'
+import { testKnobs } from '../testKnobs'
 import type { CompletionAction } from '../../shared/types'
 import type {
   DownloadUpdate,
@@ -200,7 +203,7 @@ export class MediaDownloadManager {
     this.initialization = this.cleanStaleTemps()
       .then(() => this.restorePersisted())
       .catch((error: unknown) => {
-        console.error('[Speed-o-Freq Sonic] media recovery failed:', error)
+        console.error('[Sonic] media recovery failed:', error)
       })
   }
 
@@ -218,7 +221,7 @@ export class MediaDownloadManager {
         if (details && details.mtimeMs < cutoff) await rm(path, { force: true }).catch(() => {})
       }
     } catch (error) {
-      console.warn('[Speed-o-Freq Sonic] Could not clean stale media temp files:', error)
+      console.warn('[Sonic] Could not clean stale media temp files:', error)
     }
   }
 
@@ -544,7 +547,7 @@ export class MediaDownloadManager {
     runtime.lastAt = Date.now()
     runtime.lastPersistAt = runtime.lastAt
     void this.persist(runtime).catch((error) =>
-      console.warn('[Speed-o-Freq Sonic] could not persist media task start:', error)
+      console.warn('[Sonic] could not persist media task start:', error)
     )
     this.pushUpdate(runtime)
     const stream = runtime.request.mediaStream!
@@ -624,7 +627,7 @@ export class MediaDownloadManager {
           runtime.state.status = 'paused'
           runtime.state.speedBytesPerSec = 0
           void this.persist(runtime).catch((error) =>
-            console.warn('[Speed-o-Freq Sonic] could not persist paused media task:', error)
+            console.warn('[Sonic] could not persist paused media task:', error)
           )
           this.pushUpdate(runtime)
         } else {
@@ -662,7 +665,7 @@ export class MediaDownloadManager {
     if (now - runtime.lastPersistAt >= 15_000) {
       runtime.lastPersistAt = now
       void this.persist(runtime).catch((error) =>
-        console.warn('[Speed-o-Freq Sonic] could not checkpoint media task:', error)
+        console.warn('[Sonic] could not checkpoint media task:', error)
       )
     }
   }
@@ -698,26 +701,41 @@ export class MediaDownloadManager {
       // Checkpoint completion before updating history. Startup can finish the history write if
       // the app exits between these two durable operations.
       await this.persist(runtime).catch((error) =>
-        console.warn('[Speed-o-Freq Sonic] could not checkpoint completed media task:', error)
+        console.warn('[Sonic] could not checkpoint completed media task:', error)
       )
       await addToHistory(history)
       await this.removeManifest(runtime.state.id)
       this.pushUpdate(runtime)
       this.getWindow()?.webContents.send(IpcChannels.historyChanged)
       const action = this.getCompletionAction()
-      if (action === 'open') {
-        void shell.openPath(destinationPath).then((error) => {
-          if (error)
-            console.warn(
-              '[Speed-o-Freq Sonic] completion action could not open media output:',
-              error
-            )
-        })
-      } else if (action === 'notify' && Notification.isSupported()) {
-        new Notification({
-          title: 'Download complete',
-          body: `${runtime.state.fileName} has finished downloading.`
-        }).show()
+      // Do not launch downloaded code automatically. The shared notification's Open button is
+      // the explicit user action for recognized installers; ordinary files reveal their location.
+      if (
+        action !== 'none' &&
+        (!testKnobs.userDataDir || process.env['SONIC_E2E_NOTIFICATIONS'] === '1')
+      ) {
+        void loadSettings()
+          .then((settings) => {
+            const mainWindow = this.getWindow()
+            return showCompletionToast({
+              title: 'Download complete',
+              fileName: runtime.state.fileName,
+              path: destinationPath,
+              sizeBytes: details.size,
+              dedupeKey: runtime.state.id,
+              themeSource: settings.themeSource ?? 'sonic',
+              onOpenApp: () => {
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                  if (mainWindow.isMinimized()) mainWindow.restore()
+                  mainWindow.show()
+                  mainWindow.focus()
+                }
+              }
+            })
+          })
+          .catch((error: unknown) => {
+            console.warn('[Sonic] could not show media completion notification:', error)
+          })
       }
     } catch (error) {
       await this.finishFailure(runtime, error instanceof Error ? error.message : String(error))
@@ -743,7 +761,7 @@ export class MediaDownloadManager {
     runtime.state.bytesDownloaded = 0
     runtime.state.totalBytes = 0
     await this.persist(runtime).catch((error) =>
-      console.warn('[Speed-o-Freq Sonic] could not persist media task failure:', error)
+      console.warn('[Sonic] could not persist media task failure:', error)
     )
     this.pushUpdate(runtime)
   }

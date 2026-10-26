@@ -1,4 +1,4 @@
-﻿import type { ThemeSource } from '@shared/types'
+import type { ThemeSource } from '@shared/types'
 import { useAppStore } from '../store/useAppStore'
 import { useLocale } from '../i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'

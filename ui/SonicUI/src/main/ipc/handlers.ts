@@ -41,7 +41,7 @@ async function openNetworkSettings(): Promise<void> {
   }
 }
 
-/** Typed wrapper around ipcMain.handle â€” the channel name picks its args/result shape out of
+/** Typed wrapper around ipcMain.handle — the channel name picks its args/result shape out of
  * IpcContract, so a handler here that doesn't match what sonicApi (preload) actually calls is a
  * compile error instead of a silent runtime mismatch. */
 function handle<K extends keyof IpcContract>(
@@ -103,13 +103,13 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
   handle('deviceBindingSupported', async () => bindingSupport)
 
   // The app only ever assigns 'light'/'dark' to nativeTheme.themeSource (main/index.ts's startup
-  // call to loadThemeSource() never resolves to 'system') â€” narrow Electron's wider type here
+  // call to loadThemeSource() never resolves to 'system') — narrow Electron's wider type here
   // rather than widening our own ThemeSource just to match it.
   const currentThemeSource = (): ThemeSource =>
     nativeTheme.themeSource === 'dark' ? 'dark' : 'light'
 
   handle('updateSettings', async (_event, patch) => {
-    // The one setting main also applies â€” before saving, so a failed write still switches the
+    // The one setting main also applies — before saving, so a failed write still switches the
     // window to the theme the toggle now shows.
     if (patch?.themeSource === 'light' || patch?.themeSource === 'dark') {
       nativeTheme.themeSource = patch.themeSource
@@ -119,14 +119,14 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
     await manager.applySettings(await loadSettings())
   })
 
-  // Answered via sendSync from the preload, which blocks the page until returnValue is set â€” so a
+  // Answered via sendSync from the preload, which blocks the page until returnValue is set — so a
   // throw here must still reply (with no saved values) rather than leave the window never showing.
   ipcMain.on(IpcChannels.getInitialState, async (event) => {
     try {
       const settings = await loadSettings()
       const { destinationDir } = settings
       // Capped: a folder on a dropped network share can take many seconds to answer, and launch
-      // waits on this reply â€” past the cap it's treated as gone and Downloads is used instead.
+      // waits on this reply — past the cap it's treated as gone and Downloads is used instead.
       const destinationExists =
         destinationDir !== undefined &&
         (await Promise.race([
@@ -143,7 +143,6 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         themeSource: currentThemeSource(),
         networkPreferences: settings.networkPreferences ?? {},
         downloadsAtOnce: settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
-        speedLimit: settings.speedLimit,
         slowMode: settings.slowMode ?? false,
         slowModeSpeed: settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
         speedUnit: settings.speedUnit ?? 'bytes',
@@ -153,8 +152,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): Down
         destinationRules: settings.destinationRules ?? []
       } satisfies InitialState
     } catch (error) {
-      console.error('[Speed-o-Freq Sonic] failed to read initial state', error)
-      // No getPath() here â€” it may be what threw. An empty destination just keeps Start disabled.
+      console.error('[Sonic] failed to read initial state', error)
+      // No getPath() here — it may be what threw. An empty destination just keeps Start disabled.
       event.returnValue = {
         homeDir: '',
         downloadsDir: '',

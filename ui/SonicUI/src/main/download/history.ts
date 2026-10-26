@@ -143,6 +143,20 @@ export function addToHistory(entry: FinishedDownload): Promise<void> {
   })
 }
 
+/** Mark an entry removed from the main list without deleting its durable history record. */
+export function markHistoryRemoved(id: string): Promise<void> {
+  return serializeHistoryMutation(async () => {
+    await preserveInvalidHistory()
+    await updateJson(historyPath(), (current) =>
+      documentOf(
+        entriesOf(current).map((entry) =>
+          entry.id === id ? { ...entry, removedAt: Date.now() } : entry
+        )
+      )
+    )
+  })
+}
+
 /** Forget entries, not the files themselves. */
 export function removeFromHistory(ids?: string[]): Promise<void> {
   return serializeHistoryMutation(async () => {

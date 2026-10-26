@@ -1,12 +1,14 @@
 import { Minus, Maximize2, X, Settings } from 'lucide-react'
 import { TITLE_BAR_HEIGHT } from '../theme'
 import { useLocale } from '../i18n'
+import sonicBlueLogo from '../assets/brand/sonic-blue.png'
 
 const isMac = window.sonic.platform === 'darwin'
 
 /** App-owned controls use macOS-style traffic-light buttons on non-macOS platforms. */
 export function TitleBar({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
   const { t } = useLocale()
+  const logo = sonicBlueLogo
   const buttonBase =
     'group relative flex size-6 shrink-0 items-center justify-center rounded-full border border-black/15 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.35)] outline-none transition-[filter,transform] hover:brightness-95 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [-webkit-app-region:no-drag]'
   const glyphBase =
@@ -15,8 +17,10 @@ export function TitleBar({ onOpenSettings }: { onOpenSettings: () => void }): Re
   return (
     <div
       style={{ height: TITLE_BAR_HEIGHT }}
-      className="relative flex shrink-0 items-center justify-center border-b-[0.5px] border-border bg-card px-[140px] [-webkit-app-region:drag]"
+      className="relative flex shrink-0 items-center justify-center border-b-[0.5px] border-border bg-card px-[140px] [-webkit-app-region:no-drag]"
     >
+      {/* Keep window dragging on a very thin strip; the rest of the title bar remains a valid file-drop target. */}
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 z-0 h-1 [-webkit-app-region:drag]" />
       <button
         type="button"
         aria-label={t('openSettings')}
@@ -27,8 +31,15 @@ export function TitleBar({ onOpenSettings }: { onOpenSettings: () => void }): Re
         <Settings size={16} strokeWidth={1.7} />
       </button>
 
-      <div className="truncate font-sans text-[13px] leading-none font-semibold text-[var(--text-secondary)]">
-        Speed-o&apos;-Freq Sonic
+      <div className="flex min-w-0 items-center justify-center gap-2 font-sans text-[13px] leading-none font-semibold text-[var(--text-secondary)] [-webkit-app-region:no-drag]">
+        <img
+          src={logo}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          className="size-5 shrink-0 object-contain"
+        />
+        <span className="truncate">Sonic</span>
       </div>
 
       {!isMac && (

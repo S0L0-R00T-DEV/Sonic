@@ -6,5 +6,11 @@ out/
 .eslintcache
 *.log*
 test-results/
-playwright-report/
 *.tsbuildinfo
+
+dist-sonic-final/
+release-static-checks.log
+release-static-exit-code.txt
+security-gate-run.log
+security-gate-exit-code.txt
+diagnostics/

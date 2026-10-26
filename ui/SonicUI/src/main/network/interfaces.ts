@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createConnection } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { promisify } from 'node:util'
 import type { NetworkAddress, NetworkInterfaceInfo, NetworkInterfaceKind } from '../../shared/types'
@@ -6,11 +7,39 @@ import { testInterfaces } from '../testKnobs'
 
 const execFileAsync = promisify(execFile)
 const DISCOVERY_TIMEOUT_MS = 5000
+const INTERNET_PROBE_CACHE_MS = 15_000
+const internetProbeCache = new Map<string, { expiresAt: number; reachable: boolean }>()
+
+/** Tests real outbound TCP connectivity bound to this adapter's IPv4 address. Cached briefly so
+ * the one-second interface monitor does not continuously open probe connections. */
+function hasInternetAccess(localAddress: string): Promise<boolean> {
+  const cached = internetProbeCache.get(localAddress)
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.reachable)
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: '1.1.1.1', port: 443, localAddress })
+    let settled = false
+    const finish = (reachable: boolean): void => {
+      if (settled) return
+      settled = true
+      internetProbeCache.set(localAddress, {
+        expiresAt: Date.now() + INTERNET_PROBE_CACHE_MS,
+        reachable
+      })
+      socket.destroy()
+      resolve(reachable)
+    }
+    socket.setTimeout(1400, () => finish(false))
+    socket.once('connect', () => finish(true))
+    socket.once('error', () => finish(false))
+  })
+}
 
 interface WindowsAdapter {
   Name: string
   InterfaceDescription: string
   NdisPhysicalMedium: number
+  Status?: string
+  HasDefaultRoute?: boolean
 }
 
 /**
@@ -78,7 +107,7 @@ async function getWindowsAdapters(): Promise<Map<string, WindowsAdapter>> {
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-NetAdapter -ErrorAction Stop | Select-Object Name, InterfaceDescription, NdisPhysicalMedium | ConvertTo-Json -Compress'
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $routes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty InterfaceIndex -Unique); Get-NetAdapter -ErrorAction Stop | ForEach-Object { [pscustomobject]@{ Name=$_.Name; InterfaceDescription=$_.InterfaceDescription; NdisPhysicalMedium=$_.NdisPhysicalMedium; Status=$_.Status; HasDefaultRoute=($routes -contains $_.ifIndex) } } | ConvertTo-Json -Compress"
       ],
       { windowsHide: true, timeout: DISCOVERY_TIMEOUT_MS, encoding: 'utf8' }
     )
@@ -160,6 +189,19 @@ export async function listActiveInterfaces(): Promise<NetworkInterfaceInfo[]> {
 
     const hardwareName = hardwarePorts.get(device)
     const adapter = windowsAdapters.get(device)
+    // On Windows, an assigned address is not enough: Hyper-V/WSL virtual switches often have
+    // addresses but no route to the public internet. Only expose adapters that are up and own
+    // an IPv4 default route; this keeps unusable virtual interfaces out of download selection.
+    if (
+      process.platform === 'win32' &&
+      windowsAdapters.size > 0 &&
+      (!adapter || adapter.Status !== 'Up' || adapter.HasDefaultRoute !== true)
+    )
+      continue
+    if (process.platform === 'win32' && windowsAdapters.size > 0) {
+      const ipv4 = usable.find((address) => address.family === 4)
+      if (!ipv4 || !(await hasInternetAccess(ipv4.address))) continue
+    }
     let kind =
       process.platform === 'linux'
         ? classifyLinuxDevice(device)

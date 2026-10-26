@@ -13,7 +13,7 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   {
     pattern: /EACCES|EPERM/,
     message:
-      'Speed-o-Freq Sonic doesn’t have permission to access this file or folder. Check its permissions or choose another folder.'
+      'Sonic doesn’t have permission to access this file or folder. Check its permissions or choose another folder.'
   },
   {
     pattern: /ENOENT/,
@@ -22,14 +22,12 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /EROFS/, message: 'This drive is read-only. Choose another download folder.' },
   {
     pattern: /EIO/,
-    message:
-      'Speed-o-Freq Sonic couldn’t read or write the download. Check the drive and try again.'
+    message: 'Sonic couldn’t read or write the download. Check the drive and try again.'
   },
   {
     pattern:
       /Invalid torrent metadata|Invalid torrent|Invalid info hash|Invalid infoHash|Invalid magnet/i,
-    message:
-      'Speed-o-Freq Sonic couldn’t read this torrent. Try another magnet link or .torrent file.'
+    message: 'Sonic couldn’t read this torrent. Try another magnet link or .torrent file.'
   },
   {
     pattern: LINK_REFUSED,
@@ -37,16 +35,16 @@ const ERROR_HINTS: Array<{ pattern: RegExp; message: string }> = [
   },
   {
     pattern: /Download is incomplete/,
-    message: 'Speed-o-Freq Sonic couldn’t download every part of the file. Try downloading again.'
+    message: 'Sonic couldn’t download every part of the file. Try downloading again.'
   },
   {
     pattern: /Download file size does not match/,
     message:
-      'The downloaded file has an unexpected size. Speed-o-Freq Sonic couldn’t save the completed file. Try downloading again.'
+      'The downloaded file has an unexpected size. Sonic couldn’t save the completed file. Try downloading again.'
   },
   {
     pattern: /ENOTFOUND|EAI_AGAIN/,
-    message: 'Speed-o-Freq Sonic couldn’t find the server. Check the link and your connection.'
+    message: 'Sonic couldn’t find the server. Check the link and your connection.'
   },
   {
     pattern: /ECONNREFUSED/,

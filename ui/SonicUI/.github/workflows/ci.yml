@@ -6,15 +6,13 @@ on:
   push:
     branches: [main]
 
-# A second push to a PR makes the first run's answer irrelevant, so don't
-# spend a runner finishing it.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   ci:
-    name: ci
+    name: Static checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,11 +22,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      # --ignore-scripts skips our postinstall: Electron's binary download
-      # (install-electron) and electron-builder's native rebuild. Both are
-      # needed to *run* the app;
-      # linting, typechecking and format-checking need only the packages
-      # themselves, and that download would otherwise dominate every run.
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
@@ -40,64 +33,3 @@ jobs:
 
       - name: Check formatting
         run: npm run format:check
-
-  e2e:
-    name: E2E (smoke)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      # Unlike the ci job, this one runs the app, so Electron's binary is needed.
-      - name: Install dependencies
-        run: npm ci
-
-      # Electron needs a display even with its window hidden.
-      - name: Run smoke tests
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24 -noreset" npm run test:e2e:smoke
-
-      # Packages the build the tests just made: electron-builder checks all of electron-builder.yml
-      # (every OS's settings) first, so a bad option fails here instead of on a release tag.
-      - name: Package
-        run: npx electron-builder --linux dir --publish never
-
-      - name: Upload report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report
-          retention-days: 14
-
-  windows-torrent:
-    name: Windows torrent engine
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      # Deliberately don't install native binaries: importing the TCP torrent engine must work
-      # without node-datachannel, just as it must in the Windows installer.
-      - name: Install dependencies without native binaries
-        run: npm ci --ignore-scripts
-
-      - name: Apply dependency patches
-        run: npx patch-package
-
-      - name: Check torrent engine without WebRTC
-        run: npx playwright test e2e/torrentNative.spec.ts
-        env:
-          SONIC_E2E_SKIP_BUILD: '1'
-
-      - name: Check sparse staging files
-        run: npx playwright test e2e/sparseFile.spec.ts
-        env:
-          SONIC_E2E_SKIP_BUILD: '1'

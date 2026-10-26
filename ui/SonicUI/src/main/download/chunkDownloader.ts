@@ -82,7 +82,7 @@ const STALL_TIMEOUT_MS = testKnobs.stallTimeoutMs
 // Only the initial probe resolves redirects today — if a CDN reissues a
 // redirect mid-download (e.g. a signed URL rotates), a chunk needs to be
 // able to follow it too instead of failing outright.
-const MAX_REDIRECTS = 5
+const MAX_REDIRECTS = 10
 
 interface ServedRange {
   start: number

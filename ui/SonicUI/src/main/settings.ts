@@ -56,14 +56,17 @@ function sanitizeNetworkPreferences(parsed: unknown): NetworkPreferences {
   return result
 }
 
-/** Trusts nothing past "this is valid JSON" â€” the file may be hand-edited or from an older
+/** Trusts nothing past "this is valid JSON" — the file may be hand-edited or from an older
  * version, and a patch comes from the renderer. Every field is checked on its own, so one bad
  * value only loses that value. An `undefined` field in a patch clears it. */
 function sanitizeSettings(parsed: unknown): AppSettings {
-  if (!isRecord(parsed)) return {}
+  if (!isRecord(parsed))
+    return { customTags: ['Games', 'Archives', 'Media', 'Documents', 'Software', 'Other'] }
 
   const { themeSource, destinationDir, downloadsAtOnce } = parsed
-  const settings: AppSettings = {}
+  const settings: AppSettings = {
+    customTags: ['Games', 'Archives', 'Media', 'Documents', 'Software', 'Other']
+  }
   if (
     parsed.completionAction === 'none' ||
     parsed.completionAction === 'notify' ||
@@ -76,7 +79,7 @@ function sanitizeSettings(parsed: unknown): AppSettings {
       ? parsed.downloadSchedule
       : { ...DEFAULT_DOWNLOAD_SCHEDULE, enabled: true, days: [] }
   }
-  // 'system' was once an option â€” dropping it falls back to the OS appearance (loadThemeSource).
+  // 'system' was once an option — dropping it falls back to the OS appearance (loadThemeSource).
   if (themeSource === 'sonic' || themeSource === 'light' || themeSource === 'dark')
     settings.themeSource = themeSource
   if (typeof destinationDir === 'string' && isAbsolute(destinationDir)) {
@@ -89,14 +92,19 @@ function sanitizeSettings(parsed: unknown): AppSettings {
   if (parsed.networkPreferences !== undefined) {
     settings.networkPreferences = sanitizeNetworkPreferences(parsed.networkPreferences)
   }
-  const speedLimit = byteCount(parsed.speedLimit)
-  if (speedLimit !== undefined) settings.speedLimit = speedLimit
+
   const slowModeSpeed = byteCount(parsed.slowModeSpeed)
   if (slowModeSpeed !== undefined) settings.slowModeSpeed = slowModeSpeed
   if (parsed.slowMode === true) settings.slowMode = true
-  if (parsed.speedUnit === 'bytes' || parsed.speedUnit === 'bits') {
-    settings.speedUnit = parsed.speedUnit
+  if (
+    ['bytes', 'bits', 'KB/s', 'MB/s', 'GB/s', 'KBps', 'MBps', 'GBps'].includes(
+      String(parsed.speedUnit)
+    )
+  ) {
+    settings.speedUnit = parsed.speedUnit as AppSettings['speedUnit']
   }
+  if (parsed.autoUpdateEnabled === true || parsed.autoUpdateEnabled === false)
+    settings.autoUpdateEnabled = parsed.autoUpdateEnabled
   if (parsed.browserExtensionUsed === true) settings.browserExtensionUsed = true
   if (Array.isArray(parsed.customTags)) {
     settings.customTags = [
@@ -198,7 +206,7 @@ export function saveSettings(patch: unknown): Promise<void> {
 
 export async function loadThemeSource(): Promise<ThemeSource> {
   const { themeSource } = await loadSettings()
-  // First run â€” follow whatever the OS appearance is right now rather than a fixed theme.
+  // First run — follow whatever the OS appearance is right now rather than a fixed theme.
   return themeSource ?? 'sonic'
 }
 

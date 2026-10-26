@@ -58,7 +58,7 @@ export function FixLinkDialog({
           <DialogTitle>{t('Paste a new link')}</DialogTitle>
           <DialogDescription>
             {download &&
-              `Paste a new link to the same file: ${download.fileName}${download.totalBytes > 0 ? ` (${formatBytes(download.totalBytes)})` : ''}. Speed-o'-Freq Sonic resumes from where the download stopped.`}
+              `Paste a new link to the same file: ${download.fileName}${download.totalBytes > 0 ? ` (${formatBytes(download.totalBytes)})` : ''}. Sonic resumes from where the download stopped.`}
             {download?.kind === 'http' &&
               download.fromBrowser &&
               ` Or download it again in ${download.fromBrowser} and choose Resume it.`}

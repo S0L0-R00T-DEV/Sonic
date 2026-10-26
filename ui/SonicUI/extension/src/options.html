@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Speed-o'-Freq Sonic extension options</title>
+    <title>Sonic extension options</title>
     <link rel="stylesheet" href="ui.css" />
     <style>
       main {
@@ -82,7 +82,7 @@
       <header>
         <img src="icons/icon-128.png" alt="" />
         <div class="grow">
-          <h1>Speed-o'-Freq Sonic</h1>
+          <h1>Sonic</h1>
           <div class="muted">Extension options</div>
         </div>
       </header>
@@ -92,10 +92,12 @@
         <div class="card">
           <label class="row" for="capture">
             <span class="grow">
-              <span class="title">Capture downloads</span>
+              <span class="title">Send direct downloads straight to Sonic</span>
               <span class="muted"
-                >Every download this browser starts opens in Speed-o'-Freq Sonic. If Speed-o'-Freq
-                Sonic isn’t open, the browser keeps it.</span
+                >When enabled, supported direct HTTP(S) downloads are handed to Sonic instead of the
+                browser download manager. If Sonic is closed or a link cannot be handed off safely,
+                the browser keeps the download. Turn this off to use the browser download manager
+                normally.</span
               >
             </span>
             <input type="checkbox" role="switch" class="switch" id="capture" />
@@ -160,7 +162,7 @@
           <form class="row" id="add-site" style="flex-direction: column; align-items: stretch">
             <span class="muted"
               >Downloads from these sites and their subdomains stay in the browser. Right-click ›
-              Download with Speed-o'-Freq Sonic still works on them.</span
+              Download with Sonic still works on them.</span
             >
             <span style="display: flex; gap: 8px">
               <input
@@ -179,7 +181,7 @@
           </form>
           <ul id="sites"></ul>
           <div class="row muted" id="no-sites" style="border-top: 0.5px solid var(--border)">
-            No sites yet. Every site’s downloads go to Speed-o'-Freq Sonic.
+            No sites yet. Every site’s downloads go to Sonic.
           </div>
         </div>
       </section>
@@ -194,7 +196,7 @@
               >
               <span class="mono muted" id="port"></span>
             </span>
-            <button type="button" id="open-sonic" hidden>Open Speed-o'-Freq Sonic</button>
+            <button type="button" id="open-sonic" hidden>Open Sonic</button>
           </div>
         </div>
       </section>

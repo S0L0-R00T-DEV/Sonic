@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Speed-o'-Freq Sonic</title>
+    <title>Sonic</title>
     <link rel="stylesheet" href="ui.css" />
     <style>
       body {
@@ -60,29 +60,33 @@
   <body>
     <header>
       <img src="icons/icon-32.png" alt="" />
-      <strong>Speed-o'-Freq Sonic</strong>
+      <strong>Sonic</strong>
       <div id="status" role="status">
         <span class="dot" id="status-dot"></span><span id="status-text">…</span>
       </div>
     </header>
 
     <div class="notice" id="access" hidden>
-      Speed-o'-Freq Sonic needs access to websites to send your sign-in with each download.
+      Sonic needs access to websites to send your sign-in with each download.
       <button type="button" class="primary" id="grant">Allow access</button>
     </div>
 
     <div id="closed" hidden>
-      <div class="title">Speed-o'-Freq Sonic isn’t open</div>
-      <div class="muted">Downloads stay in the browser until it is.</div>
+      <div class="title">Sonic isn’t open</div>
+      <div class="muted">
+        Open Sonic to receive browser downloads. If handoff fails, the browser keeps the download.
+      </div>
       <div style="display: flex; align-items: center; gap: 12px">
-        <button type="button" id="open-sonic">Open Speed-o'-Freq Sonic</button>
-        <a href="https://getsonic.app" target="_blank" rel="noreferrer">Get Speed-o'-Freq Sonic</a>
+        <button type="button" id="open-sonic">Open Sonic</button>
+        <a href="https://github.com/S0L0-R00T-DEV/Sonic" target="_blank" rel="noreferrer"
+          >Get Sonic</a
+        >
       </div>
     </div>
 
     <label class="row" for="capture">
       <span class="grow">
-        <span class="title">Capture downloads</span>
+        <span class="title">Send direct downloads straight to Sonic</span>
         <span class="muted" id="capture-hint"></span>
       </span>
       <input type="checkbox" role="switch" class="switch" id="capture" />

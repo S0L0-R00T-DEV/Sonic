@@ -138,7 +138,10 @@ export async function browserContext(
 }
 
 function browserName(): string {
+  const manifestName = api.runtime.getManifest().name
+  if (/Tor Browser/i.test(manifestName)) return 'Tor Browser'
   const agent = navigator.userAgent
+  if (/TorBrowser/i.test(agent) || /Tor Browser/i.test(agent)) return 'Tor Browser'
   if (/Firefox\//.test(agent)) return 'Firefox'
   if (/Edg\//.test(agent)) return 'Edge'
   if (/OPR\//.test(agent)) return 'Opera'

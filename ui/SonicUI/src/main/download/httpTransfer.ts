@@ -62,6 +62,8 @@ interface Attempt {
   /** Aborts this request alone; ChunkRuntime.controller aborts the whole stream. */
   abort: AbortController
   abortReason: AbortReason | null
+  /** Which verified mirror this attempt used, so a failure advances the global fallback once. */
+  mirrorUrl: string | null
   /** What the server's answer cost, for diagnosing slow connections (see SONIC_DEBUG). */
   response: { ttfbMs: number; reusedSocket: boolean } | null
 }
@@ -116,7 +118,7 @@ interface ChunkRuntime {
 // Set SONIC_DEBUG=1 to log every request's outcome, how long the server took to answer and
 // whether it reused a warm connection — what it takes to tell one slow connection from a slow path.
 const debug: (...args: unknown[]) => void = process.env['SONIC_DEBUG']
-  ? (...args) => console.debug('[Speed-o-Freq Sonic]', ...args)
+  ? (...args) => console.debug('[Sonic]', ...args)
   : () => {}
 
 const MAX_CHUNK_RETRIES = 5
@@ -281,7 +283,7 @@ export async function compareSamples(
  */
 export class HttpTransfer implements Transfer {
   private chunkRuntimes = new Map<number, ChunkRuntime>()
-  /** Round-robin across mirrors only after the manager verifies their strong ETag and length. */
+  /** Round-robin source assignment across the primary and pre-verified mirrors. */
   private mirrorCursor = 0
   /** The running streams' workers, by stream id. Empty unless the download is running. */
   private workers = new Map<number, Promise<void>>()
@@ -650,6 +652,7 @@ export class HttpTransfer implements Transfer {
       previousWriter: block.interfaceId,
       abort: new AbortController(),
       abortReason: null,
+      mirrorUrl: null,
       response: null
     }
 
@@ -718,7 +721,9 @@ export class HttpTransfer implements Transfer {
         this.runtime.requestPayload.url,
         ...(this.runtime.requestPayload.mirrorUrls ?? [])
       ]
-      const mirrorUrl = mirrors[this.mirrorCursor++ % mirrors.length]
+      const mirrorUrl = mirrors[this.mirrorCursor % mirrors.length]
+      this.mirrorCursor = (this.mirrorCursor + 1) % mirrors.length
+      attempt.mirrorUrl = mirrorUrl
       await downloadChunk({
         url: mirrorUrl,
         browser: this.runtime.requestPayload.browser,
@@ -857,8 +862,18 @@ export class HttpTransfer implements Transfer {
     }
     self.failures = 0
     self.strikes = 0
-    // Whoever is still racing for the block has lost.
-    for (const rival of this.attempts.get(block.index) ?? []) this.abortAttempt(rival, 'lost')
+    // Whoever is still racing for the block has lost. Abort the requests and release their
+    // visible stream state synchronously before publishing the completed block. Otherwise a UI
+    // snapshot can briefly claim that a stream is downloading a block that is already complete.
+    const rivals = [...(this.attempts.get(block.index) ?? [])]
+    for (const rival of rivals) {
+      this.abortAttempt(rival, 'lost')
+      const rivalChunk = this.runtime.state.streams.find(
+        (candidate) => candidate.id === rival.streamId
+      )
+      const rivalRuntime = this.chunkRuntimes.get(rival.streamId)
+      if (rivalChunk && rivalRuntime) this.letGo(rivalChunk, rivalRuntime, rival, false)
+    }
     recomputeAggregates(this.runtime.state, this.runtime.blocks)
     this.host.scheduleUpdate()
     return 'continue'
@@ -901,6 +916,21 @@ export class HttpTransfer implements Transfer {
     error: unknown
   ): Promise<'continue' | 'stop'> {
     const message = error instanceof Error ? error.message : String(error)
+    const mirrors = [
+      this.runtime.requestPayload.url,
+      ...(this.runtime.requestPayload.mirrorUrls ?? [])
+    ]
+    // Retry failed work from the next pre-verified source, rather than sending the same range
+    // straight back to the endpoint that just failed it.
+    if (
+      mirrors.length > 1 &&
+      attempt.mirrorUrl &&
+      !(error instanceof RemoteChangedError) &&
+      !(error instanceof NoCompatibleRouteError)
+    ) {
+      const failedIndex = mirrors.indexOf(attempt.mirrorUrl)
+      if (failedIndex >= 0) this.mirrorCursor = (failedIndex + 1) % mirrors.length
+    }
     const network = this.network(attempt.networkId)
     const deliveredNothing = attempt.networkReceived === 0
 

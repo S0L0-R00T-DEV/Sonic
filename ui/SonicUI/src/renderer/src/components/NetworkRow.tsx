@@ -1,4 +1,5 @@
-﻿import type { HttpBlockState, HttpStreamState, NetworkStatus, SpeedUnit } from '@shared/types'
+import type { HttpBlockState, HttpStreamState, NetworkStatus, SpeedUnit } from '@shared/types'
+import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 import { DANGER, type NetworkVisual } from '../theme'
 import type { HttpNetworkGroup, NetworkGroup, TorrentNetworkGroup } from '../utils/format'
@@ -24,7 +25,7 @@ interface NetworkRowProps {
 const STATUS_TEXT: Record<Exclude<NetworkStatus, 'on'>, string> = {
   off: 'Off',
   offline: 'Not connected',
-  unreachable: 'Canâ€™t reach server',
+  unreachable: 'Can’t reach server',
   failed: 'Failed',
   limit: 'Data limit reached'
 }
@@ -36,7 +37,7 @@ export function networkStatusText(
   transfer: 'http' | 'torrent'
 ): string {
   return status === 'unreachable' && transfer === 'torrent'
-    ? 'Canâ€™t reach peers'
+    ? 'Can’t reach peers'
     : STATUS_TEXT[status]
 }
 
@@ -118,7 +119,7 @@ function HttpStreamRows({
           : stream.status === 'paused'
             ? 'Paused'
             : stream.status === 'retrying'
-              ? 'Retryingâ€¦'
+              ? 'Retrying…'
               : 'Idle'
         return (
           <div
@@ -194,7 +195,7 @@ function HttpStreamRows({
               className="text-right font-mono text-[11px] leading-none font-medium whitespace-nowrap tabular-nums"
               style={{ color: active ? visual.text : 'var(--text-tertiary)' }}
             >
-              {active ? formatSpeed(stream.speedBytesPerSec) : '?'}
+              {active ? formatSpeed(stream.speedBytesPerSec) : '—'}
             </div>
             <div
               role="cell"
@@ -259,19 +260,31 @@ function TwoWay({
 }): React.JSX.Element {
   return (
     <>
-      <div>
+      <div className="flex items-center justify-end gap-1">
         <span className="sr-only">{labels[0]} </span>
-        {showUp && <span aria-hidden>? </span>}
-        {down}
+        <ArrowDownToLine aria-hidden="true" className="size-3 shrink-0 opacity-70" />
+        <span>{down}</span>
       </div>
       {showUp && (
-        <div className="text-muted-foreground">
+        <div className="flex items-center justify-end gap-1 text-muted-foreground">
           <span className="sr-only">{labels[1]} </span>
-          <span aria-hidden>? </span>
-          {up}
+          <ArrowUpFromLine aria-hidden="true" className="size-3 shrink-0 opacity-70" />
+          <span>{up}</span>
         </div>
       )}
     </>
+  )
+}
+
+function safePeerText(value: string): string {
+  // Peer metadata is remote input. Drop replacement characters, common UTF-8 decoding
+  // artifacts, and control characters before displaying it in the renderer.
+  return (
+    value
+      .replace(/\u00c3\u00a2|\u00e2\u20ac|\ufffd/g, '')
+      // eslint-disable-next-line no-control-regex -- Strip control characters from untrusted peer metadata.
+      .replace(/[\u0000-\u001f\u007f]/g, '')
+      .trim()
   )
 }
 
@@ -290,6 +303,7 @@ function PeerRows({
       {group.peers.map((peer, index) => {
         const receiving = peer.status === 'receiving' && peer.speedBytesPerSec > 0
         const sent = peer.bytesUploaded > 0
+        const client = peer.client ? safePeerText(peer.client) : ''
         return (
           <div
             role="row"
@@ -315,9 +329,9 @@ function PeerRows({
                 Peer #{peer.id + 1}
               </span>
               {/* The client it runs, as a stream shows its chunk. */}
-              {peer.client && (
+              {client && (
                 <span className="min-w-0 truncate rounded-[3px] border-[0.5px] border-border bg-secondary px-[4.5px] py-[1.5px] text-[9px] leading-none whitespace-nowrap text-muted-foreground">
-                  {peer.client}
+                  {client}
                 </span>
               )}
             </div>
@@ -339,9 +353,11 @@ function PeerRows({
               style={{ color: receiving ? visual.text : 'var(--text-tertiary)' }}
             >
               <TwoWay
-                down={receiving ? formatSpeed(peer.speedBytesPerSec) : '?'}
+                down={receiving ? safePeerText(formatSpeed(peer.speedBytesPerSec)) : '—'}
                 up={
-                  peer.uploadSpeedBytesPerSec > 0 ? formatSpeed(peer.uploadSpeedBytesPerSec) : '?'
+                  peer.uploadSpeedBytesPerSec > 0
+                    ? safePeerText(formatSpeed(peer.uploadSpeedBytesPerSec))
+                    : '—'
                 }
                 showUp={sent}
                 labels={['Receiving at', 'Sending at']}
@@ -445,8 +461,8 @@ export function NetworkRow({
             >
               {connections.length} {noun}
               {connections.length === 1 ? '' : 's'}{' '}
-              <span aria-hidden className="text-[7.5px] opacity-75">
-                {expanded ? 'â–²' : 'â–¼'}
+              <span aria-hidden="true" className="opacity-70">
+                {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
               </span>
             </Button>
           )}
@@ -494,7 +510,7 @@ export function NetworkRow({
                 isActive ? (
                   formatSpeed(group.speedBytesPerSec)
                 ) : (
-                  '?'
+                  '—'
                 )
               ) : (
                 <SpeedOfLimit
@@ -508,7 +524,7 @@ export function NetworkRow({
             up={
               group.transfer === 'torrent' && group.uploadSpeedBytesPerSec > 0
                 ? formatSpeed(group.uploadSpeedBytesPerSec)
-                : '?'
+                : '—'
             }
             // Always for a torrent, so it's plain each network uploads too.
             showUp={group.transfer === 'torrent'}

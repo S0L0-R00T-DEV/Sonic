@@ -93,7 +93,7 @@ export class Limits {
     // A slow mode speed never changed isn't saved: it's the default the window shows.
     const total = settings.slowMode
       ? (settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED)
-      : settings.speedLimit
+      : undefined
     this.total = adjust(this.total, total)
     const preferences = settings.networkPreferences ?? {}
     for (const id of new Set([...this.perNetwork.keys(), ...Object.keys(preferences)])) {

@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { Download, FileDown, Gauge, RotateCcw } from 'lucide-react'
 import type { NetworkInterfaceInfo } from '@shared/types'
 import { Button } from './ui/button'

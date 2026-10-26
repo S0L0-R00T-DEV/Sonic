@@ -1,9 +1,9 @@
-﻿import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, Menu, nativeTheme, shell } from 'electron'
+import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { app, BrowserWindow, Menu, nativeTheme, shell, Tray } from 'electron'
 import { join, resolve } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { testKnobs } from './testKnobs'
-import icon from '../../resources/icon-dark.png?asset'
+import { currentBrandIcon, registerBrandTray, setBrandTheme } from './appBranding'
 import {
   getSonicThemeSource,
   registerSonicBridge,
@@ -29,30 +29,19 @@ if (e2eGpuEnabled) {
   app.disableHardwareAcceleration()
 }
 
-app.setName("Speed-o'-Freq Sonic")
-// Portable mode is opt-in and points userData at a user-selected writable folder. The selector
-// lives under appData so installed builds need not write into Program Files.
-if (testKnobs.userDataDir && !app.isPackaged) app.setPath('userData', testKnobs.userDataDir)
-else {
-  try {
-    const marker = join(app.getPath('appData'), "Speed-o'-Freq Sonic", 'portable-mode.json')
-    const config = JSON.parse(readFileSync(marker, 'utf8')) as {
-      version?: number
-      userDataDir?: unknown
-    }
-    if (
-      config.version === 1 &&
-      typeof config.userDataDir === 'string' &&
-      existsSync(resolve(config.userDataDir))
-    ) {
-      app.setPath('userData', resolve(config.userDataDir))
-    }
-  } catch {
-    /* First launch or portable mode is not configured. */
-  }
-}
+app.setName('Sonic')
+const appDataDir = app.getPath('appData')
+const legacyUserDataDir = join(appDataDir, "Speed-o'-Freq Sonic")
+// An explicit isolated profile is useful for acceptance-testing a fresh packaged build alongside
+// an existing Sonic session without sharing its single-instance lock or touching its downloads.
+const isolatedUserDataDir = process.env['SONIC_ISOLATED_USER_DATA_DIR']
+if (isolatedUserDataDir) app.setPath('userData', resolve(isolatedUserDataDir))
+else if (existsSync(legacyUserDataDir)) app.setPath('userData', legacyUserDataDir)
+else if (testKnobs.userDataDir && !app.isPackaged) app.setPath('userData', testKnobs.userDataDir)
 const headlessMode = process.argv.includes('--headless')
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let quittingFromTray = false
 
 const hasInstanceLock = app.requestSingleInstanceLock()
 if (!hasInstanceLock) app.quit()
@@ -76,6 +65,38 @@ else {
   if (startupLink) offerLink({ url: startupLink, from: 'command line' }, null)
 }
 
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  }
+}
+
+function ensureTray(): void {
+  if (tray) return
+  tray = new Tray(currentBrandIcon())
+  tray.setToolTip('Sonic')
+  registerBrandTray(tray)
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open Sonic', click: showMainWindow },
+      { type: 'separator' },
+      {
+        label: 'Exit Sonic',
+        click: () => {
+          quittingFromTray = true
+          tray?.destroy()
+          tray = null
+          app.quit()
+        }
+      }
+    ])
+  )
+  tray.on('double-click', showMainWindow)
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 760,
@@ -84,9 +105,9 @@ function createWindow(): void {
     minHeight: 620,
     show: false,
     autoHideMenuBar: true,
-    title: "Speed-o'-Freq Sonic",
+    title: 'Sonic',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#050505' : '#fffdf5',
-    ...(process.platform !== 'darwin' ? { icon } : {}),
+    ...(process.platform !== 'darwin' ? { icon: currentBrandIcon() } : {}),
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 9 } } : {}),
     webPreferences: {
@@ -95,7 +116,16 @@ function createWindow(): void {
       nodeIntegration: false
     }
   })
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('ready-to-show', () => {
+    mainWindow?.setIcon(currentBrandIcon())
+    mainWindow?.show()
+  })
+  mainWindow.on('close', (event) => {
+    if (quittingFromTray) return
+    event.preventDefault()
+    mainWindow?.hide()
+    ensureTray()
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -117,9 +147,11 @@ function createWindow(): void {
         : []
     if (template.length) Menu.buildFromTemplate(template).popup()
   })
-  if (process.env['ELECTRON_RENDERER_URL'])
+  if (process.env['ELECTRON_RENDERER_URL']) {
     void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  else void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  } else {
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
 }
 
 app.whenReady().then(async () => {
@@ -127,7 +159,11 @@ app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.speedofreq.sonic')
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
   await registerSonicBridge()
-  nativeTheme.themeSource = getSonicThemeSource()
+  setBrandTheme()
+  nativeTheme.themeSource = getSonicThemeSource() === 'light' ? 'light' : 'dark'
+  // Keep the desktop UI responsive even when the download backend is slow or unavailable.
+  // Headless remote-control startup still waits for the backend below before enabling its listener.
+  if (!headlessMode) createWindow()
   let backendReady = true
   await waitForSonicBackend().catch((error) => {
     backendReady = false
@@ -155,7 +191,6 @@ app.whenReady().then(async () => {
       return
     }
   }
-  if (!headlessMode) createWindow()
   nativeTheme.on('updated', () => {
     mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#050505' : '#fffdf5')
   })
@@ -164,7 +199,14 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('before-quit', () => stopSonicBridge())
+app.on('before-quit', () => {
+  // Explicit app.quit() (including OS shutdown and automated tests) must bypass the close-to-tray
+  // handler; otherwise Electron hides the window again and never finishes quitting.
+  quittingFromTray = true
+  tray?.destroy()
+  tray = null
+  stopSonicBridge()
+})
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (process.platform !== 'darwin' && !tray) app.quit()
 })

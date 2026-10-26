@@ -182,7 +182,7 @@ const missingLicenseTexts = (
 ).length
 const unverifiedUpstreamLicenses = (
   notices.match(
-    /^- License text provenance: (?:UPSTREAM BRANCH FILE; exact release correspondence requires owner verification\.|OWNER REVIEW REQUIRED:.*)$/gm
+    /^- License text provenance: (?:UPSTREAM BRANCH FILE; exact release correspondence requires owner verification\.|OWNER REVIEW REQUIRED:.*|CONFLICTING LICENSE METADATA:.*)$/gm
   ) ?? []
 ).length
 const licenseIssues = missingLicenseTexts + unverifiedUpstreamLicenses

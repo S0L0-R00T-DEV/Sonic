@@ -2,6 +2,7 @@ import { createWriteStream, type WriteStream } from 'node:fs'
 import { lstat, open, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import { testPublishRenameError } from '../testKnobs'
+import { markSparse } from './sparseFile'
 
 /** Per stream: 32 streams hold at most 16 MiB. A full buffer is also what tells Auto the disk is
  * behind (see concurrency.ts): larger, and it hears it later. */
@@ -46,6 +47,18 @@ export class DownloadFile {
 
   async size(): Promise<number> {
     return (await stat(this.path)).size
+  }
+
+  /** Recreates a deleted HTTP staging file. Callers must reset saved block progress first. */
+  async recreate(totalBytes: number): Promise<void> {
+    const handle = await open(this.path, 'w+')
+    try {
+      if (totalBytes > 0) await handle.truncate(totalBytes)
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+    await markSparse(this.path)
   }
 
   async publish(

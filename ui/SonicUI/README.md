@@ -11,7 +11,7 @@ Speed-o'-Freq Sonic is a Windows desktop download manager front end connected to
 
 ## Browser integration
 
-The optional browser extension supports Chromium-compatible browsers (including Chrome and Edge) and Firefox. Automatic interception is **off by default** and requires an explicit enable in the extension popup. See [docs/browser-extension.md](docs/browser-extension.md) for installation, permissions, privacy behavior and test coverage.
+The optional browser extension supports the detected Chromium browsers and Firefox. Direct-download handoff is **on by default after the user installs the extension**, can be switched off in the extension popup/options, and falls back to the browser if Sonic cannot accept a handoff. Browser security still requires the user to load/enable the extension. See [docs/browser-extension.md](docs/browser-extension.md) for installation, permissions, privacy behavior and test coverage. See [docs/plugins.md](docs/plugins.md) for plugin installation and signing.
 
 ## Build
 

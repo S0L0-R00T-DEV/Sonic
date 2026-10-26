@@ -13,7 +13,7 @@ import { instancePipeSuffix } from './instancePipe'
 import { connect, type Socket } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { existsSync, statSync } from 'node:fs'
-import { readFile, statfs, writeFile } from 'node:fs/promises'
+import { copyFile, readFile, statfs, writeFile } from 'node:fs/promises'
 import { join, basename, dirname, resolve } from 'node:path'
 import { IpcChannels as C } from '../shared/ipc-channels'
 import type {
@@ -28,9 +28,11 @@ import type {
   SiteMirrorPreview,
   SiteMirrorProgressEvent,
   AppSettings,
-  InitialState
+  InitialState,
+  ThemeSource
 } from '../shared/types'
 import { loadSettings, saveSettings } from './settings'
+import { setBrandTheme } from './appBranding'
 import { scheduleWindow } from '../shared/downloadSchedule'
 import { startBridge } from './browserBridge'
 import { testInterfaces } from './testKnobs'
@@ -50,7 +52,9 @@ import { NetworkMonitor } from './network/interfaces'
 import { probeUrl } from './download/probe'
 import { previewSiteMirror } from './siteMirror'
 import {
+  addToHistory as addNativeHistory,
   listHistory as nativeHistory,
+  markHistoryRemoved as markNativeHistoryRemoved,
   removeFromHistory as clearNativeHistory
 } from './download/history'
 import { startCliControlServer, stopCliControlServer } from './cliControl'
@@ -66,8 +70,15 @@ import {
   stopRemoteControl
 } from './remoteControlServer'
 import { PluginRegistry } from './pluginRegistry'
-import { createStorageBackup, restoreStorageBackup } from './storageBackup'
-import { configurePortableDir } from './storageMode'
+import {
+  createSettingsBackup,
+  createHistoryBackup,
+  isHistoryBackup,
+  isSettingsBackup,
+  restoreHistoryBackup,
+  restoreSettingsBackup,
+  restoreStorageBackup
+} from './storageBackup'
 import { DEFAULT_SLOW_MODE_SPEED, DOWNLOADS_AT_ONCE } from '../shared/types'
 
 type QueueItem = {
@@ -113,14 +124,14 @@ const DEFAULT_SETTINGS: AppSettings = {
   completionAction: 'notify',
   themeSource: 'sonic',
   downloadsAtOnce: DOWNLOADS_AT_ONCE.default,
-  speedUnit: 'bytes'
+  speedUnit: 'MB/s'
 }
 const settings: AppSettings = { ...DEFAULT_SETTINGS }
 const downloadsDir = join(app.getPath('home'), 'Downloads')
 let lastPolicySignature: string | null = null
 let legacyBackendPolicyUnsupported = false
-export function getSonicThemeSource(): 'dark' | 'light' {
-  return settings.themeSource === 'light' ? 'light' : 'dark'
+export function getSonicThemeSource(): ThemeSource {
+  return settings.themeSource ?? 'sonic'
 }
 function backendExe(): string {
   const configured = process.env.SONIC_BACKEND_EXE
@@ -131,7 +142,7 @@ function backendExe(): string {
     '..',
     '..',
     'artifacts',
-    'cli-queue-20261018',
+    'sonic-backend-current',
     'win-x64',
     'SpeedOFreq.exe'
   )
@@ -141,14 +152,19 @@ function ensureBackend(): void {
   const exe = backendExe()
   if (!existsSync(exe))
     throw new Error('Sonic backend not found at ' + exe + '. Build the x64 backend package first.')
-  backend = spawn(exe, ['--backend'], {
+  const child = spawn(exe, ['--backend'], {
     windowsHide: true,
     stdio: 'ignore',
     env: { ...process.env, SONIC_BACKEND_PIPE: backendPipeName() }
   })
-  backend.on('exit', () => {
-    backend = null
-  })
+  backend = child
+  // A previous child can exit after a replacement has already started. Only clear the shared
+  // reference when the exiting child is still the one we own.
+  const clearExitedBackend = (): void => {
+    if (backend === child) backend = null
+  }
+  child.on('exit', clearExitedBackend)
+  child.on('error', clearExitedBackend)
 }
 function controlOnce(payload: Record<string, unknown>): Promise<ControlResponse> {
   ensureBackend()
@@ -196,7 +212,7 @@ async function control(payload: Record<string, unknown>): Promise<ControlRespons
     } catch (error) {
       lastError = error
       const code = (error as NodeJS.ErrnoException).code
-      if (attempt === 47 || !['ENOENT', 'ECONNREFUSED'].includes(code ?? '')) throw error
+      if (attempt === 47 || !['ENOENT', 'ECONNREFUSED', 'EBADF'].includes(code ?? '')) throw error
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
   }
@@ -419,8 +435,8 @@ async function emitSnapshot(): Promise<void> {
     const allowed = scheduleWindow(settings.downloadSchedule).allowed
     const downloadsAtOnce = settings.downloadsAtOnce ?? 2
     const speedLimitBytesPerSecond = settings.slowMode
-      ? settings.slowModeSpeed
-      : settings.speedLimit
+      ? (settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED)
+      : undefined
     const networkSpeedLimits = interfaces().flatMap((network) => {
       const rate = settings.networkPreferences?.[network.id]?.speedLimit
       return rate && rate > 0
@@ -533,7 +549,7 @@ export async function registerSonicBridge(): Promise<void> {
     () => BrowserWindow.getAllWindows()[0] ?? null,
     () => settings.completionAction ?? 'notify',
     () => ({
-      speedLimit: settings.speedLimit,
+      speedLimit: undefined,
       networkSpeedLimit: Math.min(
         ...Object.values(settings.networkPreferences ?? {})
           .map((preference) => preference.speedLimit)
@@ -667,15 +683,15 @@ export async function registerSonicBridge(): Promise<void> {
       downloadsAtOnce: settings.downloadsAtOnce ?? 2,
       slowMode: settings.slowMode ?? false,
       slowModeSpeed: settings.slowModeSpeed ?? 2 * 1024 * 1024,
-      speedLimit: settings.speedLimit,
-      speedUnit: settings.speedUnit ?? 'bytes',
+      speedUnit: settings.speedUnit ?? 'MB/s',
       destinationDir: settings.destinationDir ?? downloadsDir,
       customTags: settings.customTags ?? [],
       downloadTags: settings.downloadTags ?? {},
       destinationRules: settings.destinationRules ?? [],
       publisherPublicKeyPem: settings.publisherPublicKeyPem,
       publisherKeyFingerprint: settings.publisherKeyFingerprint,
-      updateRepository: settings.updateRepository
+      updateRepository: settings.updateRepository,
+      autoUpdateEnabled: settings.autoUpdateEnabled ?? true
     } satisfies InitialState
   })
   // Window-control IPC is registered here because this is the active Electron bridge.
@@ -705,13 +721,78 @@ export async function registerSonicBridge(): Promise<void> {
   handle(C.openNetworkSettings, async () => {
     await shell.openExternal('ms-settings:network')
   })
+  const firefoxDefinition = {
+    label: 'Firefox',
+    url: 'about:addons',
+    paths: [
+      join(process.env.ProgramFiles ?? '', 'Mozilla Firefox', 'firefox.exe'),
+      join(process.env['ProgramFiles(x86)'] ?? '', 'Mozilla Firefox', 'firefox.exe'),
+      join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Firefox', 'firefox.exe')
+    ]
+  } as const
+  const findFirefoxExecutable = (): string | undefined =>
+    firefoxDefinition.paths.find((candidate) => candidate.length > 0 && existsSync(candidate))
+
+  handle(C.openBrowserExtensionPage, async (browserId: 'firefox' | string) => {
+    if (browserId !== 'firefox') return { opened: false, error: 'Automatic browser launching is only supported for Firefox.' }
+    const executable = findFirefoxExecutable()
+    if (!executable) return { opened: false, error: 'Firefox was not found in its standard installation locations.' }
+    try {
+      const child = spawn(executable, [firefoxDefinition.url], { detached: true, stdio: 'ignore', windowsHide: false })
+      child.unref()
+      return await new Promise<{ opened: boolean; error?: string }>((resolve) => {
+        const timeout = setTimeout(() => resolve({ opened: false, error: 'Firefox did not accept the Add-ons Manager launch in time.' }), 2500)
+        child.once('spawn', () => { clearTimeout(timeout); resolve({ opened: true }) })
+        child.once('error', (error) => { clearTimeout(timeout); resolve({ opened: false, error: error.message }) })
+      })
+    } catch (error) {
+      return { opened: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  handle(C.copyBrowserExtensionFolderPath, async (browserId: 'firefox' | string) => {
+    if (browserId !== 'firefox') return { copied: false, error: 'Only the Firefox extension download is supported here.' }
+    const candidates = [
+      join(app.getAppPath(), 'extension', 'dist', 'SDMFFE.xpi'),
+      join(process.cwd(), 'extension', 'dist', 'SDMFFE.xpi'),
+      join(app.getAppPath(), '..', '..', 'assets', 'SDMFFE.xpi'),
+      join(process.resourcesPath, 'browser-extensions', 'SDMFFE.xpi'),
+      join(process.resourcesPath, 'assets', 'SDMFFE.xpi'),
+      join(process.resourcesPath, 'SDMFFE.xpi')
+    ]
+    const source = candidates.find((candidate) => existsSync(candidate))
+    if (!source) return { copied: false, error: 'The Firefox extension package SDMFFE.xpi was not found. Reinstall Sonic.' }
+    const destination = join(downloadsDir, 'SDMFFE.xpi')
+    try {
+      await copyFile(source, destination)
+      return { copied: true, path: destination }
+    } catch (error) {
+      return { copied: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  handle(C.copyChromiumExtensionFolderPath, async () => {
+    const candidates = [
+      join(process.resourcesPath, 'browser-extensions', 'chromium'),
+      join(app.getAppPath(), 'extension', 'dist', 'chromium'),
+      join(process.cwd(), 'extension', 'dist', 'chromium'),
+      join(app.getAppPath(), 'resources', 'browser-extensions', 'chromium')
+    ]
+    const folder = candidates.find((candidate) => existsSync(join(candidate, 'manifest.json')))
+    if (!folder) {
+      return { copied: false, error: 'The packaged Chromium extension folder was not found. Rebuild or reinstall Sonic.' }
+    }
+    clipboard.writeText(folder)
+    return { copied: true, path: folder }
+  })
+
   const settingsSnapshot = (): AppSettings => ({
     ...settings,
     themeSource: settings.themeSource ?? 'sonic',
     downloadsAtOnce: settings.downloadsAtOnce ?? DOWNLOADS_AT_ONCE.default,
     slowMode: settings.slowMode ?? false,
     slowModeSpeed: settings.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED,
-    speedUnit: settings.speedUnit ?? 'bytes',
+    speedUnit: settings.speedUnit ?? 'MB/s',
     networkPreferences: settings.networkPreferences ?? {},
     destinationDir: settings.destinationDir ?? downloadsDir,
     customTags: settings.customTags ?? [],
@@ -727,6 +808,7 @@ export async function registerSonicBridge(): Promise<void> {
     for (const key of Object.keys(settings) as (keyof AppSettings)[]) delete settings[key]
     Object.assign(settings, DEFAULT_SETTINGS, persisted)
     nativeTheme.themeSource = settings.themeSource === 'light' ? 'light' : 'dark'
+    setBrandTheme()
     lastPolicySignature = null
     const snapshot = settingsSnapshot()
     for (const window of BrowserWindow.getAllWindows()) {
@@ -749,7 +831,17 @@ export async function registerSonicBridge(): Promise<void> {
   handle(C.revokePluginKey, async (keyId: string) => {
     await pluginRegistry.revokeKey(keyId)
   })
-  handle(C.installPlugin, async (manifestJson: string) => pluginRegistry.install(manifestJson))
+  handle(C.installPlugin, async () => {
+    const picked = await dialog.showOpenDialog({
+      title: 'Select a Sonic plugin package',
+      defaultPath: downloadsDir,
+      properties: ['openFile'],
+      filters: [{ name: 'Sonic plugin packages', extensions: ['sdm', 'json'] }]
+    })
+    if (picked.canceled || !picked.filePaths[0]) return null
+    const packageText = await readFile(picked.filePaths[0], 'utf8')
+    return pluginRegistry.install(packageText)
+  })
   handle(
     C.setPluginPermissions,
     async (pluginId: string, permissions: import('../shared/pluginApi').SonicPluginPermission[]) =>
@@ -780,7 +872,7 @@ export async function registerSonicBridge(): Promise<void> {
         (window) => !window.isDestroyed() && window.webContents === event.sender
       )
       if (!trustedWindow || !event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
-        throw new Error('Site-mirror requests are only accepted from Sonicâ€™s main window.')
+        throw new Error('Site-mirror requests are only accepted from Sonic’s main window.')
       }
       if (typeof operationId !== 'string' || !/^[0-9a-f-]{36}$/i.test(operationId)) {
         throw new Error('Invalid site-mirror operation ID.')
@@ -813,7 +905,7 @@ export async function registerSonicBridge(): Promise<void> {
       (window) => !window.isDestroyed() && window.webContents === event.sender
     )
     if (!trustedWindow || !event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
-      throw new Error('Site-mirror cancellation is only accepted from Sonicâ€™s main window.')
+      throw new Error('Site-mirror cancellation is only accepted from Sonic’s main window.')
     }
     if (typeof operationId !== 'string' || !/^[0-9a-f-]{36}$/i.test(operationId)) {
       throw new Error('Invalid site-mirror operation ID.')
@@ -1218,7 +1310,15 @@ export async function registerSonicBridge(): Promise<void> {
       current.status === 'Completed'
     )
       await shell.trashItem(current.destination)
-    if (current) await control({ command: 'remove', id })
+    if (current) {
+      await control({ command: 'remove', id })
+      // The legacy queue removes completed results from its own list. Copy the completed record
+      // into Sonic's durable history first, then mark it hidden from the main list.
+      if (current.status === 'Completed') {
+        await addNativeHistory(mapFinished(current))
+        await markNativeHistoryRemoved(id)
+      }
+    }
     BrowserWindow.getAllWindows()[0]?.webContents.send(C.historyChanged)
     void emitSnapshot()
   })
@@ -1278,18 +1378,60 @@ export async function registerSonicBridge(): Promise<void> {
     )
     return true
   })
-  handle(C.exportStorageBackup, async (): Promise<boolean> => {
-    const content = await createStorageBackup()
+  handle(C.exportStorageBackup, async (kind: 'settings' | 'history' = 'settings'): Promise<boolean> => {
+    const isHistory = kind === 'history'
+    const content = isHistory ? await createHistoryBackup() : await createSettingsBackup()
+    const date = new Date().toISOString().slice(0, 10)
     const saved = await dialog.showSaveDialog({
-      title: 'Export Sonic settings and queue backup',
-      defaultPath: `Sonic-backup-${new Date().toISOString().slice(0, 10)}.sonic-backup.json`,
-      filters: [{ name: 'Sonic backup', extensions: ['json'] }]
+      title: isHistory ? 'Export Sonic download history' : 'Export Sonic settings',
+      defaultPath: isHistory
+        ? `Sonic-history-${date}.sonic-history.json`
+        : `Sonic-settings-${date}.sonic-settings.json`,
+      filters: [{ name: isHistory ? 'Sonic history backup' : 'Sonic settings backup', extensions: ['json'] }]
     })
     if (saved.canceled || !saved.filePath) return false
     await writeFile(saved.filePath, content, { encoding: 'utf8', mode: 0o600 })
     return true
   })
   handle(C.restoreStorageBackup, async () => {
+    const picked = await dialog.showOpenDialog({
+      title: 'Restore Sonic backup or download history',
+      properties: ['openFile'],
+      filters: [{ name: 'Sonic backup or history JSON', extensions: ['json'] }]
+    })
+    if (picked.canceled || !picked.filePaths[0]) return null
+    const content = await readFile(picked.filePaths[0], 'utf8')
+    if (isHistoryBackup(content)) {
+      const confirm = await dialog.showMessageBox({
+        type: 'warning',
+        buttons: ['Import history', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        title: 'Restore download history?',
+        message: 'Sonic will merge the saved download history with your current history.',
+        detail: 'A safety copy of your current history will be preserved before importing.'
+      })
+      if (confirm.response !== 0) return null
+      const result = await restoreHistoryBackup(content)
+      BrowserWindow.getAllWindows()[0]?.webContents.send(C.historyChanged)
+      return { kind: 'history' as const, ...result }
+    }
+    if (isSettingsBackup(content)) {
+      const confirm = await dialog.showMessageBox({
+        type: 'warning',
+        buttons: ['Restore settings and restart', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        title: 'Restore Sonic settings?',
+        message: 'Sonic will replace the current application settings with the settings in this file.',
+        detail: 'A safety copy of the current settings will be preserved before restoring.'
+      })
+      if (confirm.response !== 0) return null
+      const result = await restoreSettingsBackup(content)
+      app.relaunch()
+      app.exit(0)
+      return { kind: 'settings' as const, ...result }
+    }
     const active = [
       ...(await queue())
         .filter((item) => ['Running', 'Downloading'].includes(item.status))
@@ -1301,14 +1443,7 @@ export async function registerSonicBridge(): Promise<void> {
         .filter((item) => item.state.status === 'downloading')
         .map((item) => item.state.id)
     ]
-    if (active.length) throw new Error('Pause active downloads before restoring a backup.')
-    const picked = await dialog.showOpenDialog({
-      title: 'Restore Sonic settings and queue backup',
-      properties: ['openFile'],
-      filters: [{ name: 'Sonic backup JSON', extensions: ['json'] }]
-    })
-    if (picked.canceled || !picked.filePaths[0]) return null
-    const content = await readFile(picked.filePaths[0], 'utf8')
+    if (active.length) throw new Error('Pause active downloads before restoring a Sonic backup.')
     const confirm = await dialog.showMessageBox({
       type: 'warning',
       buttons: ['Restore and restart', 'Cancel'],
@@ -1324,46 +1459,10 @@ export async function registerSonicBridge(): Promise<void> {
     const result = await restoreStorageBackup(content)
     app.relaunch()
     app.exit(0)
-    return result
-  })
-  handle(C.configurePortableStorage, async (): Promise<string | null> => {
-    const picked = await dialog.showOpenDialog({
-      title: 'Choose portable storage folder',
-      properties: ['openDirectory', 'createDirectory']
-    })
-    if (picked.canceled || !picked.filePaths[0]) return null
-    const active = [
-      ...(await queue())
-        .filter((item) => ['Running', 'Downloading'].includes(item.status))
-        .map((item) => item.id),
-      ...(await torrentManager.listDownloads())
-        .filter((item) => item.state.status === 'downloading')
-        .map((item) => item.state.id),
-      ...(await mediaManager.listDownloads())
-        .filter((item) => item.state.status === 'downloading')
-        .map((item) => item.state.id)
-    ]
-    if (active.length) throw new Error('Pause active downloads before switching storage locations.')
-    const confirm = await dialog.showMessageBox({
-      type: 'warning',
-      buttons: ['Copy data and restart', 'Cancel'],
-      defaultId: 1,
-      cancelId: 1,
-      title: 'Enable portable storage?',
-      message:
-        'Sonic will copy settings, queue manifests, and history into the selected empty folder, then use it on future launches.',
-      detail:
-        'Choose a folder on a drive you can write to. Removable drives can disconnect, lose data, or become unavailable; keep independent backups. The folder must be empty.'
-    })
-    if (confirm.response !== 0) return null
-    const destination = await configurePortableDir(picked.filePaths[0])
-    app.relaunch()
-    app.exit(0)
-    return destination
+    return { kind: 'sonic' as const, ...result }
   })
   handle(C.getStorageInfo, async () => ({
-    userDataDir: app.getPath('userData'),
-    portable: existsSync(join(app.getPath('appData'), "Speed-o'-Freq Sonic", 'portable-mode.json'))
+    userDataDir: app.getPath('userData')
   }))
   const dispatchControl = async (request: Record<string, unknown>): Promise<unknown> => {
     const textOf = (...keys: string[]): string | undefined => {
@@ -1483,7 +1582,7 @@ export async function registerSonicBridge(): Promise<void> {
           ? Math.round((state.bytesDownloaded / state.totalBytes) * 10000) / 100
           : null,
       speedBytesPerSec: state.speedBytesPerSec,
-      speedUnit: effectiveSettings().speedUnit,
+      speedUnit: effectiveSettings().speedUnit ?? 'MB/s',
       error: state.error,
       startedAt: new Date(state.startedAt).toISOString(),
       completedAt: state.completedAt ? new Date(state.completedAt).toISOString() : null,
@@ -1669,17 +1768,19 @@ export async function registerSonicBridge(): Promise<void> {
         const prefs = effectiveSettings()
         const recoveryIssues = torrentManager.listRecoveryIssues()
         return {
-          application: "Speed-o'-Freq Sonic",
+          application: 'Sonic',
           connected: true,
           version: app.getVersion(),
           mode: prefs.themeSource,
           slowMode: prefs.slowMode,
           speedUnit: prefs.speedUnit,
-          speedLimitBytesPerSecond: prefs.speedLimit ?? null,
+          speedLimitBytesPerSecond: prefs.slowMode
+            ? (prefs.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED)
+            : null,
           slowModeSpeedBytesPerSecond: prefs.slowModeSpeed,
           effectiveSpeedLimitBytesPerSecond: prefs.slowMode
-            ? prefs.slowModeSpeed
-            : (prefs.speedLimit ?? null),
+            ? (prefs.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED)
+            : null,
           downloadsAtOnce: prefs.downloadsAtOnce,
           activeDownloadCount: downloads.filter((entry) => entry.state.status === 'downloading')
             .length,
@@ -1745,15 +1846,17 @@ export async function registerSonicBridge(): Promise<void> {
         const value = textOf('value', 'unit')
         if (!value)
           return {
-            speedUnit: effectiveSettings().speedUnit,
-            display: effectiveSettings().speedUnit === 'bits' ? 'Mbps' : 'MB/s'
+            speedUnit: effectiveSettings().speedUnit ?? 'MB/s',
+            display: effectiveSettings().speedUnit ?? 'MB/s'
           }
         return applySettingByKey('speedUnit', value)
       }
       case 'speed-limit': {
         if (argValue === undefined)
-          return { speedLimitBytesPerSecond: effectiveSettings().speedLimit ?? null }
-        return updateSettings({ speedLimit: rateToBytes(argValue, request.unit) ?? null })
+          return { slowModeSpeedBytesPerSecond: effectiveSettings().slowModeSpeed }
+        const rate = rateToBytes(argValue, request.unit)
+        if (rate === undefined) throw new Error('Slow-mode speed must be a positive rate.')
+        return updateSettings({ slowModeSpeed: rate })
       }
       case 'slow-mode-speed': {
         if (argValue === undefined)

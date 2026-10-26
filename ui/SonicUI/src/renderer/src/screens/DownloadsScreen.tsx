@@ -4,18 +4,14 @@ import {
   Plus,
   X,
   History as HistoryIcon,
-  ListPlus,
   Search,
-  Globe,
-  Tags
+  Tags as TagsIcon
 } from 'lucide-react'
 import { cn } from 'cn'
+import { DownloadOrganizationDialog } from '../components/DownloadOrganizationDialog'
 import { Fragment, memo, useCallback, useEffect, useState } from 'react'
 import { DownloadContextMenu } from '../components/DownloadContextMenu'
 import { DownloadFilterMenu } from '../components/DownloadFilterMenu'
-import { BatchImportDialog } from '../components/BatchImportDialog'
-import { MirrorSiteDialog } from '../components/MirrorSiteDialog'
-import { DownloadOrganizationDialog } from '../components/DownloadOrganizationDialog'
 import { useDownloadActions, useDownloadActionsState } from '../components/downloadActionsContext'
 import { ACTION_META, toolbarLabel } from '../components/downloadActionMeta'
 import { MoreActionsMenu } from '../components/MoreActionsMenu'
@@ -81,7 +77,7 @@ function groupsOf(downloads: DownloadState[], history: FinishedDownload[]): Grou
   ].filter((group) => group.items.length > 0)
 }
 
-/** "2 downloading Â· 1 queued", or "all done". */
+/** "2 downloading · 1 queued", or "all done". */
 function summaryOf(downloads: DownloadState[]): string {
   const count = (status: DownloadState['status']): number =>
     downloads.filter((download) => download.status === status).length
@@ -93,14 +89,14 @@ function summaryOf(downloads: DownloadState[]): string {
   ]
     .filter(([n]) => (n as number) > 0)
     .map(([n, label]) => `${n} ${label}`)
-  return parts.length > 0 ? parts.join(' Â· ') : 'all done'
+  return parts.length > 0 ? parts.join(' · ') : 'all done'
 }
 
 const groupLabelClass =
   'font-mono text-[10.5px] leading-none font-medium tracking-[0.18em] text-muted-foreground uppercase'
 
 export function DownloadsScreen(): React.JSX.Element {
-  const { locale, t } = useLocale()
+  const { t } = useLocale()
   const downloadsById = useAppStore((store) => store.downloads)
   const history = useAppStore((store) => store.history)
   const setView = useAppStore((store) => store.setView)
@@ -111,14 +107,9 @@ export function DownloadsScreen(): React.JSX.Element {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest')
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [batchImportOpen, setBatchImportOpen] = useState(false)
-  const [mirrorSiteOpen, setMirrorSiteOpen] = useState(false)
-  const [organizationOpen, setOrganizationOpen] = useState(false)
+  const [tagsOpen, setTagsOpen] = useState(false)
   const downloadTags = useAppStore((store) => store.downloadTags)
-  const [batchImportInitialInput, setBatchImportInitialInput] = useState<string | undefined>(
-    undefined
-  )
-  const { perform, askClearFinished } = useDownloadActions()
+  const { perform } = useDownloadActions()
   const { busy } = useDownloadActionsState()
   const [limitsOpen, setLimitsOpen] = useState(false)
   const [showSchedule, setShowSchedule] = useState(false)
@@ -133,7 +124,12 @@ export function DownloadsScreen(): React.JSX.Element {
   const downloads = Object.values(downloadsById)
     .filter((download) => download.status !== 'cancelled')
     .sort((a, b) => a.startedAt - b.startedAt)
-  const allGroups = groupsOf(downloads, history)
+  const historyGroups = groupsOf(downloads, history)
+  const historyItems = historyGroups.flatMap((group) => group.items)
+  const allGroups = groupsOf(
+    downloads,
+    history.filter((entry) => !entry.removedAt)
+  )
   const allItems = allGroups.flatMap((group) => group.items)
   const counts: Record<DownloadFilter, number> = {
     all: allItems.length,
@@ -250,18 +246,6 @@ export function DownloadsScreen(): React.JSX.Element {
           <div className="flex-1" />
           <ScheduleIndicator onClick={openSchedule} />
           <NetworksMenu />
-          <Button type="button" variant="secondary" onClick={() => setBatchImportOpen(true)}>
-            <ListPlus data-icon="inline-start" />
-            {t('importLinks')}
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => setOrganizationOpen(true)}>
-            <Tags data-icon="inline-start" />
-            Tags & rules
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => setMirrorSiteOpen(true)}>
-            <Globe data-icon="inline-start" />
-            {t('mirrorSite')}
-          </Button>
           <Button type="button" onClick={() => openNewDownload()}>
             <Plus data-icon="inline-start" />
             {t('newDownload')}
@@ -303,17 +287,17 @@ export function DownloadsScreen(): React.JSX.Element {
           >
             Select all
           </Button>
-          <div className="flex-1" />
           <Button
             type="button"
             size="sm"
             variant="secondary"
             disabled={busy}
-            onClick={() => setOrganizationOpen(true)}
+            onClick={() => setTagsOpen(true)}
           >
-            <Tags data-icon="inline-start" />
+            <TagsIcon data-icon="inline-start" />
             Tags
           </Button>
+          <div className="flex-1" />
           <div className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {toolbarButtons.map(({ id, targets }) => (
               <Button
@@ -415,7 +399,7 @@ export function DownloadsScreen(): React.JSX.Element {
                     group.label === 'Needs attention'
                       ? t('Select all downloads needing attention')
                       : t('Select all {{group}} downloads', {
-                          group: locale === 'ur' ? t(group.label) : group.label.toLowerCase()
+                          group: group.label.toLowerCase()
                         })
                   }
                   checked={all}
@@ -427,15 +411,6 @@ export function DownloadsScreen(): React.JSX.Element {
                   <span className="ml-2.5 tracking-normal">{group.items.length}</span>
                 </h2>
                 <div className="flex-1" />
-                {group.label === 'Finished' && history.length > 0 && (
-                  <button
-                    type="button"
-                    className="text-[12.5px] text-[var(--text-secondary)] hover:text-foreground"
-                    onClick={askClearFinished}
-                  >
-                    {t('Clear finished list')}
-                  </button>
-                )}
               </div>
               {group.items.map((item) => (
                 <ListedDownload
@@ -478,6 +453,7 @@ export function DownloadsScreen(): React.JSX.Element {
                 <p className="text-xs text-muted-foreground">
                   {t('Finished, in-progress, queued and paused downloads')}
                 </p>
+                <p className="mt-1 text-xs text-muted-foreground">To clear your history, open Settings and press Clear history at the bottom.</p>
               </div>
               <Button
                 type="button"
@@ -490,12 +466,12 @@ export function DownloadsScreen(): React.JSX.Element {
               </Button>
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              {allItems.length === 0 ? (
+              {historyItems.length === 0 ? (
                 <p className="p-6 text-center text-sm text-muted-foreground">
                   {t('No download history yet.')}
                 </p>
               ) : (
-                allGroups.map((group) => (
+                historyGroups.map((group) => (
                   <div key={group.label} className="mb-3">
                     <h3 className="px-2 py-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                       {group.label}
@@ -535,7 +511,11 @@ export function DownloadsScreen(): React.JSX.Element {
                         >
                           <span className="min-w-0 truncate">{label}</span>
                           <span className="shrink-0 text-xs text-muted-foreground">
-                            {t(status)}
+                            {t(
+                              'unitsWritten' in item && item.removedAt
+                                ? 'Removed from list'
+                                : status
+                            )}
                           </span>
                         </button>
                       )
@@ -547,6 +527,11 @@ export function DownloadsScreen(): React.JSX.Element {
           </section>
         </div>
       )}
+      <DownloadOrganizationDialog
+        open={tagsOpen}
+        onOpenChange={setTagsOpen}
+        selectedIds={chosen.map((item) => item.id)}
+      />
       <LimitsDialog
         open={limitsOpen}
         showSchedule={showSchedule}
@@ -554,46 +539,21 @@ export function DownloadsScreen(): React.JSX.Element {
         page={limitsPage}
         onPageChange={setLimitsPage}
       />
-      <BatchImportDialog
-        key={batchImportInitialInput ?? 'manual'}
-        open={batchImportOpen}
-        initialInput={batchImportInitialInput}
-        onOpenChange={(next) => {
-          setBatchImportOpen(next)
-          if (!next) setBatchImportInitialInput(undefined)
-        }}
-      />
-      <MirrorSiteDialog
-        open={mirrorSiteOpen}
-        onOpenChange={setMirrorSiteOpen}
-        onUseLinks={(links) => {
-          setBatchImportInitialInput(links.join('\n'))
-          setMirrorSiteOpen(false)
-          setBatchImportOpen(true)
-        }}
-      />
-      {organizationOpen && (
-        <DownloadOrganizationDialog
-          open={organizationOpen}
-          onOpenChange={setOrganizationOpen}
-          selectedIds={chosen.map((item) => item.id)}
-        />
-      )}
     </div>
   )
 }
 
-// Colors are irrelevant here â€” the diagram is rendered `muted`, which overrides them all to
-// var(--icon-muted) â€” these are just three placeholder rows to draw the illustration with.
+// Colors are irrelevant here — the diagram is rendered `muted`, which overrides them all to
+// var(--icon-muted) — these are just three placeholder rows to draw the illustration with.
 const PLACEHOLDER_NETWORKS = [
   { solid: 'var(--icon-muted)', label: 'Wi-Fi' },
   { solid: 'var(--icon-muted)', label: 'USB' },
   { solid: 'var(--icon-muted)', label: 'Ethernet' }
 ]
-const PASTE_SHORTCUT = window.sonic.platform === 'darwin' ? 'âŒ˜V' : 'Ctrl+V'
-const NEW_SHORTCUT = window.sonic.platform === 'darwin' ? 'âŒ˜N' : 'Ctrl+N'
+const PASTE_SHORTCUT = window.sonic.platform === 'darwin' ? '⌘V' : 'Ctrl+V'
+const NEW_SHORTCUT = window.sonic.platform === 'darwin' ? '⌘N' : 'Ctrl+N'
 
-/** Nothing listed yet: how to start one â€” or, with no network connected, how to get one. */
+/** Nothing listed yet: how to start one — or, with no network connected, how to get one. */
 function EmptyState(): React.JSX.Element {
   const noNetworks = useAppStore(
     (store) => store.interfacesStatus === 'ready' && store.interfaces.length === 0
@@ -626,9 +586,15 @@ function EmptyState(): React.JSX.Element {
         </>
       ) : (
         <>
-          <div className="font-sans text-[16px] leading-[1.2] font-bold">No downloads yet</div>
+          <div className="font-sans text-[16px] leading-[1.2] font-bold">
+            {import.meta.env.VITE_SONIC_UPDATE_TEST_BUILD === 'true'
+              ? 'Software update test successful'
+              : 'No downloads yet'}
+          </div>
           <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
-            Paste a link ({PASTE_SHORTCUT}) or drop a .torrent anywhere in this window.
+            {import.meta.env.VITE_SONIC_UPDATE_TEST_BUILD === 'true'
+              ? 'This is the update-test build. If you can see this message after updating, the software update succeeded.'
+              : <>Paste a link ({PASTE_SHORTCUT}) or drop a .torrent anywhere in this window.</>}
           </div>
           <Button type="button" className="mt-1" onClick={() => openNewDownload()}>
             <Plus data-icon="inline-start" />
@@ -697,7 +663,7 @@ const DownloadRow = memo(function DownloadRow({
         : formatWhen(item.completedAt ?? now, now)
     ]
       .filter(Boolean)
-      .join(' Â· ')
+      .join(' · ')
   } else {
     const download = item
     const sizes =
@@ -712,13 +678,13 @@ const DownloadRow = memo(function DownloadRow({
           download.timeLeftSeconds !== undefined && formatEta(download.timeLeftSeconds)
         ]
           .filter(Boolean)
-          .join(' Â· ')
+          .join(' · ')
         break
       case 'queued':
-        detail = `${schedule?.enabled && !scheduleWindow(schedule, now).allowed ? (scheduleMessage(schedule, now) ?? 'Waiting for a turn') : 'Waiting for a turn'} Â· ${sizes}`
+        detail = `${schedule?.enabled && !scheduleWindow(schedule, now).allowed ? (scheduleMessage(schedule, now) ?? 'Waiting for a turn') : 'Waiting for a turn'} · ${sizes}`
         break
       case 'paused':
-        detail = wanted > 0 ? `Paused at ${percent}% Â· ${sizes}` : `Paused Â· ${sizes}`
+        detail = wanted > 0 ? `Paused at ${percent}% · ${sizes}` : `Paused · ${sizes}`
         break
       default:
         detail = describeError(download.error ?? 'Something went wrong')
