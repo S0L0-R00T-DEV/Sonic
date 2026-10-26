@@ -1,6 +1,6 @@
 {
     "name":  "sonic",
-    "version":  "2.6.3",
+    "version":  "1.0.0",
     "description":  "Sonic download manager",
     "main":  "./out/main/index.js",
     "author":  "Sonic",
