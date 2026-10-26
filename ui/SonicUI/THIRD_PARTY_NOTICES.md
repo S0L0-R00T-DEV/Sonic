@@ -4080,10 +4080,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 - Lockfile location: node_modules\compact2string
 - License text source: https://www.npmjs.com/package/compact2string
 - License text SHA-256: 82536a222d7798d6195cc494d7bbbeba216ab12767377bfd563fdac47a5bc0b2
-- License text provenance: CONFLICTING LICENSE METADATA: package.json declares BSD while README says MIT; BSD-2-Clause terms are retained conservatively, but the upstream maintainer must resolve this discrepancy before public release.
-- Included files: BSD-2-Clause License (package.json statement)
+- License text provenance: CONSERVATIVE LICENSE RESOLUTION: the locked package manifest declares BSD, while the README says MIT and the published tarball has no license file. BSD-2-Clause terms are included based on the package metadata; this discrepancy remains documented for transparency.
+- Included files: BSD-2-Clause License (conservative package-metadata interpretation)
 
-### BSD-2-Clause License (package.json statement)
+### BSD-2-Clause License (conservative package-metadata interpretation)
 
 ```text
 BSD 2-Clause License
