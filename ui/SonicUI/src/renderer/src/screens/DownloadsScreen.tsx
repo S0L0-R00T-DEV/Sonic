@@ -453,7 +453,9 @@ export function DownloadsScreen(): React.JSX.Element {
                 <p className="text-xs text-muted-foreground">
                   {t('Finished, in-progress, queued and paused downloads')}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">To clear your history, open Settings and press Clear history at the bottom.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  To clear your history, open Settings and press Clear history at the bottom.
+                </p>
               </div>
               <Button
                 type="button"
@@ -592,9 +594,11 @@ function EmptyState(): React.JSX.Element {
               : 'No downloads yet'}
           </div>
           <div className="max-w-[380px] text-[12.5px] leading-[1.6] text-[var(--text-secondary)]">
-            {import.meta.env.VITE_SONIC_UPDATE_TEST_BUILD === 'true'
-              ? 'This is the update-test build. If you can see this message after updating, the software update succeeded.'
-              : <>Paste a link ({PASTE_SHORTCUT}) or drop a .torrent anywhere in this window.</>}
+            {import.meta.env.VITE_SONIC_UPDATE_TEST_BUILD === 'true' ? (
+              'This is the update-test build. If you can see this message after updating, the software update succeeded.'
+            ) : (
+              <>Paste a link ({PASTE_SHORTCUT}) or drop a .torrent anywhere in this window.</>
+            )}
           </div>
           <Button type="button" className="mt-1" onClick={() => openNewDownload()}>
             <Plus data-icon="inline-start" />

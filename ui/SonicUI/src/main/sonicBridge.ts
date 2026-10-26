@@ -738,16 +738,38 @@ export async function registerSonicBridge(): Promise<void> {
     firefoxDefinition.paths.find((candidate) => candidate.length > 0 && existsSync(candidate))
 
   handle(C.openBrowserExtensionPage, async (browserId: 'firefox' | string) => {
-    if (browserId !== 'firefox') return { opened: false, error: 'Automatic browser launching is only supported for Firefox.' }
+    if (browserId !== 'firefox')
+      return { opened: false, error: 'Automatic browser launching is only supported for Firefox.' }
     const executable = findFirefoxExecutable()
-    if (!executable) return { opened: false, error: 'Firefox was not found in its standard installation locations.' }
+    if (!executable)
+      return {
+        opened: false,
+        error: 'Firefox was not found in its standard installation locations.'
+      }
     try {
-      const child = spawn(executable, [firefoxDefinition.url], { detached: true, stdio: 'ignore', windowsHide: false })
+      const child = spawn(executable, [firefoxDefinition.url], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: false
+      })
       child.unref()
       return await new Promise<{ opened: boolean; error?: string }>((resolve) => {
-        const timeout = setTimeout(() => resolve({ opened: false, error: 'Firefox did not accept the Add-ons Manager launch in time.' }), 2500)
-        child.once('spawn', () => { clearTimeout(timeout); resolve({ opened: true }) })
-        child.once('error', (error) => { clearTimeout(timeout); resolve({ opened: false, error: error.message }) })
+        const timeout = setTimeout(
+          () =>
+            resolve({
+              opened: false,
+              error: 'Firefox did not accept the Add-ons Manager launch in time.'
+            }),
+          2500
+        )
+        child.once('spawn', () => {
+          clearTimeout(timeout)
+          resolve({ opened: true })
+        })
+        child.once('error', (error) => {
+          clearTimeout(timeout)
+          resolve({ opened: false, error: error.message })
+        })
       })
     } catch (error) {
       return { opened: false, error: error instanceof Error ? error.message : String(error) }
@@ -755,7 +777,8 @@ export async function registerSonicBridge(): Promise<void> {
   })
 
   handle(C.copyBrowserExtensionFolderPath, async (browserId: 'firefox' | string) => {
-    if (browserId !== 'firefox') return { copied: false, error: 'Only the Firefox extension download is supported here.' }
+    if (browserId !== 'firefox')
+      return { copied: false, error: 'Only the Firefox extension download is supported here.' }
     const candidates = [
       join(app.getAppPath(), 'extension', 'dist', 'SDMFFE.xpi'),
       join(process.cwd(), 'extension', 'dist', 'SDMFFE.xpi'),
@@ -765,7 +788,11 @@ export async function registerSonicBridge(): Promise<void> {
       join(process.resourcesPath, 'SDMFFE.xpi')
     ]
     const source = candidates.find((candidate) => existsSync(candidate))
-    if (!source) return { copied: false, error: 'The Firefox extension package SDMFFE.xpi was not found. Reinstall Sonic.' }
+    if (!source)
+      return {
+        copied: false,
+        error: 'The Firefox extension package SDMFFE.xpi was not found. Reinstall Sonic.'
+      }
     const destination = join(downloadsDir, 'SDMFFE.xpi')
     try {
       await copyFile(source, destination)
@@ -784,7 +811,10 @@ export async function registerSonicBridge(): Promise<void> {
     ]
     const folder = candidates.find((candidate) => existsSync(join(candidate, 'manifest.json')))
     if (!folder) {
-      return { copied: false, error: 'The packaged Chromium extension folder was not found. Rebuild or reinstall Sonic.' }
+      return {
+        copied: false,
+        error: 'The packaged Chromium extension folder was not found. Rebuild or reinstall Sonic.'
+      }
     }
     clipboard.writeText(folder)
     return { copied: true, path: folder }
@@ -1093,7 +1123,9 @@ export async function registerSonicBridge(): Promise<void> {
   )
   handle(C.downloadVerifiedUpdate, async (repository: string) => {
     if (!updatePublisherPublicKeyPem || !updatePublisherKeyFingerprint)
-      throw new Error('This development build has no pinned update publisher key. Signed release builds embed the trusted key automatically.')
+      throw new Error(
+        'This development build has no pinned update publisher key. Signed release builds embed the trusted key automatically.'
+      )
     return downloadVerifiedUpdate(
       repository,
       updatePublisherPublicKeyPem,
@@ -1390,21 +1422,29 @@ export async function registerSonicBridge(): Promise<void> {
     )
     return true
   })
-  handle(C.exportStorageBackup, async (kind: 'settings' | 'history' = 'settings'): Promise<boolean> => {
-    const isHistory = kind === 'history'
-    const content = isHistory ? await createHistoryBackup() : await createSettingsBackup()
-    const date = new Date().toISOString().slice(0, 10)
-    const saved = await dialog.showSaveDialog({
-      title: isHistory ? 'Export Sonic download history' : 'Export Sonic settings',
-      defaultPath: isHistory
-        ? `Sonic-history-${date}.sonic-history.json`
-        : `Sonic-settings-${date}.sonic-settings.json`,
-      filters: [{ name: isHistory ? 'Sonic history backup' : 'Sonic settings backup', extensions: ['json'] }]
-    })
-    if (saved.canceled || !saved.filePath) return false
-    await writeFile(saved.filePath, content, { encoding: 'utf8', mode: 0o600 })
-    return true
-  })
+  handle(
+    C.exportStorageBackup,
+    async (kind: 'settings' | 'history' = 'settings'): Promise<boolean> => {
+      const isHistory = kind === 'history'
+      const content = isHistory ? await createHistoryBackup() : await createSettingsBackup()
+      const date = new Date().toISOString().slice(0, 10)
+      const saved = await dialog.showSaveDialog({
+        title: isHistory ? 'Export Sonic download history' : 'Export Sonic settings',
+        defaultPath: isHistory
+          ? `Sonic-history-${date}.sonic-history.json`
+          : `Sonic-settings-${date}.sonic-settings.json`,
+        filters: [
+          {
+            name: isHistory ? 'Sonic history backup' : 'Sonic settings backup',
+            extensions: ['json']
+          }
+        ]
+      })
+      if (saved.canceled || !saved.filePath) return false
+      await writeFile(saved.filePath, content, { encoding: 'utf8', mode: 0o600 })
+      return true
+    }
+  )
   handle(C.restoreStorageBackup, async () => {
     const picked = await dialog.showOpenDialog({
       title: 'Restore Sonic backup or download history',
@@ -1435,7 +1475,8 @@ export async function registerSonicBridge(): Promise<void> {
         defaultId: 1,
         cancelId: 1,
         title: 'Restore Sonic settings?',
-        message: 'Sonic will replace the current application settings with the settings in this file.',
+        message:
+          'Sonic will replace the current application settings with the settings in this file.',
         detail: 'A safety copy of the current settings will be preserved before restoring.'
       })
       if (confirm.response !== 0) return null

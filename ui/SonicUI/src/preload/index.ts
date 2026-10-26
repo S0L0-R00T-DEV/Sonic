@@ -65,8 +65,13 @@ const sonicApi = {
   probeUrl: (url: string) => invoke('probeUrl', url),
   checkForUpdate: (repository: string) => invoke('checkForUpdate', repository),
   downloadVerifiedUpdate: (repository: string) => invoke('downloadVerifiedUpdate', repository),
-  onUpdateDownloadProgress: (callback: (progress: import('../shared/types').UpdateDownloadProgress) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, progress: import('../shared/types').UpdateDownloadProgress): void => callback(progress)
+  onUpdateDownloadProgress: (
+    callback: (progress: import('../shared/types').UpdateDownloadProgress) => void
+  ): (() => void) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      progress: import('../shared/types').UpdateDownloadProgress
+    ): void => callback(progress)
     ipcRenderer.on(IpcChannels.updateDownloadProgress, listener)
     return () => ipcRenderer.removeListener(IpcChannels.updateDownloadProgress, listener)
   },

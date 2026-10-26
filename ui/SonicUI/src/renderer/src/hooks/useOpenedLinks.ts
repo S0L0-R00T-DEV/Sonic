@@ -52,7 +52,9 @@ export function useNewDownloadShortcuts(): void {
       event.preventDefault()
       const transfer = event.dataTransfer
       if (!transfer) return
-      const file = Array.from(transfer.files).find((candidate) => /\.torrent$/i.test(candidate.name))
+      const file = Array.from(transfer.files).find((candidate) =>
+        /\.torrent$/i.test(candidate.name)
+      )
       if (file) {
         event.preventDefault()
         event.stopImmediatePropagation()
@@ -60,7 +62,11 @@ export function useNewDownloadShortcuts(): void {
         if (path) openNewDownload(path)
         return
       }
-      const text = [transfer.getData('text/uri-list'), transfer.getData('text/plain'), transfer.getData('text')]
+      const text = [
+        transfer.getData('text/uri-list'),
+        transfer.getData('text/plain'),
+        transfer.getData('text')
+      ]
         .flatMap((value) => value.split(/\r?\n/))
         .map((value) => value.trim())
         .find((value) => value && !value.startsWith('#') && acceptedLink(value) !== null)
