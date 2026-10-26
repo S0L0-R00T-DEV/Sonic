@@ -44,8 +44,7 @@ jobs:
           $publicCertificatePath = Join-Path $env:RUNNER_TEMP 'sonic-signing.cer'
           [IO.File]::WriteAllBytes($publicCertificatePath, $signingCertificate.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
           Write-Host 'Adding release signer certificate to the ephemeral CI trust store.'
-          $trustOutput = & certutil.exe -f -user -silent -addstore Root $publicCertificatePath 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "Could not configure CI trust for release signer: $($trustOutput -join ' ')" }
+          Import-Certificate -FilePath $publicCertificatePath -CertStoreLocation 'Cert:\CurrentUser\Root' -Confirm:$false | Out-Null
           Write-Host 'Release signer certificate trust setup completed.'
           Write-Host "Configured CI trust for release signer thumbprint $($signingCertificate.Thumbprint)"
           "CSC_LINK=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
