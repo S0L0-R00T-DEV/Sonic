@@ -52,7 +52,7 @@ jobs:
             ui/SonicUI/dist-sonic-release/Sonic-Extension-Chrome.zip
             ui/SonicUI/dist-sonic-release/Sonic-Extension-Firefox.zip
           if-no-files-found: error
-      - name: Create draft GitHub release
+      - name: Publish GitHub release
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,4 +64,4 @@ jobs:
             ui/SonicUI/dist-sonic-release/Sonic-CLI-win-x64.zip `
             ui/SonicUI/dist-sonic-release/Sonic-Extension-Chrome.zip `
             ui/SonicUI/dist-sonic-release/Sonic-Extension-Firefox.zip `
-            --draft --title $env:TAG --generate-notes
+            --title $env:TAG --generate-notes
