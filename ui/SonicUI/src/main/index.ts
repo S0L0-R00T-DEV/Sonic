@@ -1,5 +1,5 @@
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, Menu, nativeTheme, shell, Tray } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, Notification, shell, Tray } from 'electron'
 import { join, resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 import { testKnobs } from './testKnobs'
@@ -13,6 +13,12 @@ import {
 } from './sonicBridge'
 import { acceptedLink, bringForward, linkFromArgs, offerLink } from './openLinks'
 import { installRuntimeLogCapture } from './runtimeLog'
+import { loadSettings } from './settings'
+import { checkForUpdate } from './updater'
+import {
+  UPDATE_PUBLISHER_KEY_FINGERPRINT,
+  UPDATE_PUBLISHER_PUBLIC_KEY_PEM
+} from './updateTrust.generated'
 
 // Keep a bounded, redacted in-memory log for user-triggered diagnostic exports.
 installRuntimeLogCapture()
@@ -71,6 +77,51 @@ function showMainWindow(): void {
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
+  }
+}
+
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
+const DEFAULT_UPDATE_REPOSITORY = 'S0L0-R00T-DEV/Sonic'
+let lastNotifiedUpdateVersion: string | null = null
+
+async function checkForUpdatesInBackground(): Promise<void> {
+  try {
+    const settings = await loadSettings()
+    const result = await checkForUpdate(
+      settings.updateRepository ?? DEFAULT_UPDATE_REPOSITORY,
+      UPDATE_PUBLISHER_PUBLIC_KEY_PEM || settings.publisherPublicKeyPem,
+      UPDATE_PUBLISHER_KEY_FINGERPRINT || settings.publisherKeyFingerprint
+    )
+    if (!result.updateAvailable || !result.latestVersion || !result.releaseUrl) return
+    const openWindow = mainWindow
+    if (openWindow && !openWindow.isDestroyed()) {
+      const notifyRenderer = (): void => {
+        if (!openWindow.isDestroyed()) openWindow.webContents.send('updater:detected', result.latestVersion)
+      }
+      if (openWindow.webContents.isLoading()) openWindow.webContents.once('did-finish-load', notifyRenderer)
+      else notifyRenderer()
+    }
+    if (lastNotifiedUpdateVersion === result.latestVersion) return
+    lastNotifiedUpdateVersion = result.latestVersion
+    if (!Notification.isSupported()) return
+    const body = result.verificationError
+      ? `Version ${result.latestVersion} is available. Open Sonic → About to review update verification.`
+      : `Version ${result.latestVersion} is available. Open Sonic → About to review and install it.`
+    const notification = new Notification({ title: 'Sonic update available', body })
+    notification.on('click', () => {
+      showMainWindow()
+      const target = mainWindow
+      if (!target || target.isDestroyed()) return
+      const notifyRenderer = (): void => {
+        if (!target.isDestroyed())
+          target.webContents.send('updater:available', result.latestVersion)
+      }
+      if (target.webContents.isLoading()) target.webContents.once('did-finish-load', notifyRenderer)
+      else notifyRenderer()
+    })
+    notification.show()
+  } catch (error) {
+    console.warn('[Sonic updater] background update check failed:', error)
   }
 }
 
@@ -164,6 +215,15 @@ app.whenReady().then(async () => {
   // Keep the desktop UI responsive even when the download backend is slow or unavailable.
   // Headless remote-control startup still waits for the backend below before enabling its listener.
   if (!headlessMode) createWindow()
+  // Background checks only notify; they never download or install an update automatically.
+  if (!headlessMode) {
+    const updateTimer = setInterval(
+      () => void checkForUpdatesInBackground(),
+      UPDATE_CHECK_INTERVAL_MS
+    )
+    updateTimer.unref()
+    setTimeout(() => void checkForUpdatesInBackground(), 15000).unref()
+  }
   let backendReady = true
   await waitForSonicBackend().catch((error) => {
     backendReady = false

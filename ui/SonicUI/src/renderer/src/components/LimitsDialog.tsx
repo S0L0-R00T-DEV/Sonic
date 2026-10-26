@@ -100,9 +100,7 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
   const [clearingHistory, setClearingHistory] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [storageInfo, setStorageInfo] = useState<{ userDataDir: string } | null>(
-    null
-  )
+  const [storageInfo, setStorageInfo] = useState<{ userDataDir: string } | null>(null)
   const [storageBusy, setStorageBusy] = useState(false)
   const [exportChoiceOpen, setExportChoiceOpen] = useState(false)
   const [storageMessage, setStorageMessage] = useState<string | null>(null)
@@ -110,21 +108,6 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
   const [chromiumPathCopied, setChromiumPathCopied] = useState(false)
   const [firefoxDownloaded, setFirefoxDownloaded] = useState(false)
   const [browserActionMessage, setBrowserActionMessage] = useState<string | null>(null)
-  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(
-    () => useAppStore.getState().autoUpdateEnabled ?? true
-  )
-  const updateRepository = 'S0L0-R00T-DEV/Sonic'
-  const [updateBusy, setUpdateBusy] = useState(false)
-  const [updateResult, setUpdateResult] = useState<Awaited<
-    ReturnType<typeof window.sonic.checkForUpdate>
-  > | null>(null)
-  const [updateDownloadBusy, setUpdateDownloadBusy] = useState(false)
-  const [verifiedUpdate, setVerifiedUpdate] = useState<{
-    operationId: string
-    fileName: string
-    sha256: string
-  } | null>(null)
-  const [updateActionMessage, setUpdateActionMessage] = useState<string | null>(null)
   useEffect(() => {
     void window.sonic
       .getStorageInfo()
@@ -187,7 +170,10 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
     setConfirmReset(false)
   }
 
-  const runStorageAction = async (action: 'export' | 'restore', exportKind?: 'settings' | 'history'): Promise<void> => {
+  const runStorageAction = async (
+    action: 'export' | 'restore',
+    exportKind?: 'settings' | 'history'
+  ): Promise<void> => {
     setStorageBusy(true)
     setStorageMessage(null)
     try {
@@ -195,11 +181,19 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
         if (!exportKind) return
         const saved = await window.sonic.exportStorageBackup(exportKind)
         setExportChoiceOpen(false)
-        setStorageMessage(saved ? (exportKind === 'history' ? 'Download history exported.' : 'Sonic settings exported.') : 'Export cancelled.')
+        setStorageMessage(
+          saved
+            ? exportKind === 'history'
+              ? 'Download history exported.'
+              : 'Sonic settings exported.'
+            : 'Export cancelled.'
+        )
       } else {
         const restored = await window.sonic.restoreStorageBackup()
         if (restored?.kind === 'history') {
-          setStorageMessage(`Download history imported (${restored.historyEntries} entries merged).`)
+          setStorageMessage(
+            `Download history imported (${restored.historyEntries} entries merged).`
+          )
         } else if (restored?.kind === 'settings') {
           setStorageMessage('Sonic settings restored. Sonic is restarting to load them.')
         } else if (restored?.kind === 'sonic') {
@@ -220,31 +214,79 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
       </div>
       <fieldset disabled={saving} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <section className="flex flex-col gap-2 border-t-[0.5px] border-border py-3">
-          <h3 className="font-sans text-[14px] leading-none font-semibold">Chromium browser integration</h3>
-          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">Sonic does not detect or launch Chromium browsers. Open your preferred browser and choose Manage extensions, or enter <code>chrome://extensions</code>. Other Chromium browsers may use their own browser-name scheme or the same Manage extensions menu.</p>
+          <h3 className="font-sans text-[14px] leading-none font-semibold">
+            Chromium browser integration
+          </h3>
+          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
+            Sonic does not detect or launch Chromium browsers. Open your preferred browser and
+            choose Manage extensions, or enter <code>chrome://extensions</code>. Other Chromium
+            browsers may use their own browser-name scheme or the same Manage extensions menu.
+          </p>
           <div>
-            <Button type="button" size="sm" variant={chromiumPathCopied ? 'default' : 'secondary'} className={chromiumPathCopied ? 'bg-emerald-600 text-white hover:bg-emerald-700' : undefined} disabled={browserBusy === 'chromium-copy-path'} onClick={() => {
-              setBrowserBusy('chromium-copy-path')
-              setChromiumPathCopied(false)
-              setBrowserActionMessage(null)
-              void window.sonic.copyChromiumExtensionFolderPath()
-                .then((result) => {
-                  setChromiumPathCopied(result.copied)
-                  setBrowserActionMessage(result.copied ? 'Path copied. In the folder picker, paste it into the address bar and select the chromium folder.' : (result.error ?? 'Could not find the Chromium folder.'))
-                })
-                .catch((cause: unknown) => setBrowserActionMessage(describeError(cause)))
-                .finally(() => setBrowserBusy(null))
-            }}>{chromiumPathCopied ? <><Check className="mr-1 size-4" />Copied</> : browserBusy === 'chromium-copy-path' ? 'Copying…' : 'Copy extension path'}</Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={chromiumPathCopied ? 'default' : 'secondary'}
+              className={
+                chromiumPathCopied ? 'bg-emerald-600 text-white hover:bg-emerald-700' : undefined
+              }
+              disabled={browserBusy === 'chromium-copy-path'}
+              onClick={() => {
+                setBrowserBusy('chromium-copy-path')
+                setChromiumPathCopied(false)
+                setBrowserActionMessage(null)
+                void window.sonic
+                  .copyChromiumExtensionFolderPath()
+                  .then((result) => {
+                    setChromiumPathCopied(result.copied)
+                    setBrowserActionMessage(
+                      result.copied
+                        ? 'Path copied. In the folder picker, paste it into the address bar and select the chromium folder.'
+                        : (result.error ?? 'Could not find the Chromium folder.')
+                    )
+                  })
+                  .catch((cause: unknown) => setBrowserActionMessage(describeError(cause)))
+                  .finally(() => setBrowserBusy(null))
+              }}
+            >
+              {chromiumPathCopied ? (
+                <>
+                  <Check className="mr-1 size-4" />
+                  Copied
+                </>
+              ) : browserBusy === 'chromium-copy-path' ? (
+                'Copying…'
+              ) : (
+                'Copy extension path'
+              )}
+            </Button>
           </div>
           <ol className="list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
-            <li>Open <code>chrome://extensions</code> in Chrome, or open your browser’s own Extensions / Manage extensions page in another Chromium browser.</li>
-            <li>Turn on <strong>Developer mode</strong>.</li>
-            <li>Click <strong>Load unpacked</strong>. A folder-selection pop-up window will appear.</li>
-            <li>Click <strong>Copy extension path</strong> above. In the pop-up window, paste the copied path into the address bar, then open and select the <strong>chromium</strong> folder. Make sure you select the folder that directly contains <code>manifest.json</code>, then click <strong>Select Folder</strong>.</li>
-            <li>Enable the extension and configure it through the browser’s extension menu or the extension’s Options page.</li>
+            <li>
+              Open <code>chrome://extensions</code> in Chrome, or open your browser’s own Extensions
+              / Manage extensions page in another Chromium browser.
+            </li>
+            <li>
+              Turn on <strong>Developer mode</strong>.
+            </li>
+            <li>
+              Click <strong>Load unpacked</strong>. A folder-selection pop-up window will appear.
+            </li>
+            <li>
+              Click <strong>Copy extension path</strong> above. In the pop-up window, paste the
+              copied path into the address bar, then open and select the <strong>chromium</strong>{' '}
+              folder. Make sure you select the folder that directly contains{' '}
+              <code>manifest.json</code>, then click <strong>Select Folder</strong>.
+            </li>
+            <li>
+              Enable the extension and configure it through the browser’s extension menu or the
+              extension’s Options page.
+            </li>
           </ol>
           <details className="mt-3 rounded-md border border-border px-3 py-2">
-            <summary className="cursor-pointer text-sm font-medium">Tested and working Chromium browsers</summary>
+            <summary className="cursor-pointer text-sm font-medium">
+              Tested and working Chromium browsers
+            </summary>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
               <li>Dia</li>
               <li>Opera</li>
@@ -255,28 +297,112 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
           </details>
           <div className="mt-3 border-t border-border pt-3">
             <h4 className="text-sm font-semibold">Firefox integration</h4>
-            <p className="text-xs text-muted-foreground">Firefox uses its separate XPI package and Add-ons Manager.</p>
+            <p className="text-xs text-muted-foreground">
+              Firefox uses its separate XPI package and Add-ons Manager.
+            </p>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="secondary" disabled={browserBusy === "firefox"} onClick={() => { setBrowserBusy("firefox"); setBrowserActionMessage(null); void window.sonic.openBrowserExtensionPage().then((result) => { if (!result.opened) setBrowserActionMessage(result.error ?? "Could not open Firefox Add-ons Manager."); }).catch((cause: unknown) => setBrowserActionMessage(describeError(cause))).finally(() => setBrowserBusy(null)); }}>{browserBusy === "firefox" ? t("opening") : "Open Firefox Add-ons"}</Button>
-              <Button type="button" size="sm" variant={firefoxDownloaded ? 'default' : 'outline'} className={firefoxDownloaded ? 'bg-emerald-600 text-white hover:bg-emerald-700' : undefined} disabled={browserBusy === "firefox-download"} onClick={() => { setBrowserBusy("firefox-download"); setFirefoxDownloaded(false); setBrowserActionMessage(null); void window.sonic.copyBrowserExtensionFolderPath().then((result) => { setFirefoxDownloaded(result.copied); setBrowserActionMessage(result.copied ? "Downloaded to your Downloads folder." : (result.error ?? "Could not save the package.")); }).catch((cause: unknown) => setBrowserActionMessage(describeError(cause))).finally(() => setBrowserBusy(null)); }}>{firefoxDownloaded ? <><Download className="mr-1 size-4" />Downloaded</> : browserBusy === "firefox-download" ? "Downloading…" : "Download Firefox extension"}</Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={browserBusy === 'firefox'}
+                onClick={() => {
+                  setBrowserBusy('firefox')
+                  setBrowserActionMessage(null)
+                  void window.sonic
+                    .openBrowserExtensionPage()
+                    .then((result) => {
+                      if (!result.opened)
+                        setBrowserActionMessage(
+                          result.error ?? 'Could not open Firefox Add-ons Manager.'
+                        )
+                    })
+                    .catch((cause: unknown) => setBrowserActionMessage(describeError(cause)))
+                    .finally(() => setBrowserBusy(null))
+                }}
+              >
+                {browserBusy === 'firefox' ? t('opening') : 'Open Firefox Add-ons'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={firefoxDownloaded ? 'default' : 'outline'}
+                className={
+                  firefoxDownloaded ? 'bg-emerald-600 text-white hover:bg-emerald-700' : undefined
+                }
+                disabled={browserBusy === 'firefox-download'}
+                onClick={() => {
+                  setBrowserBusy('firefox-download')
+                  setFirefoxDownloaded(false)
+                  setBrowserActionMessage(null)
+                  void window.sonic
+                    .copyBrowserExtensionFolderPath()
+                    .then((result) => {
+                      setFirefoxDownloaded(result.copied)
+                      setBrowserActionMessage(
+                        result.copied
+                          ? 'Downloaded to your Downloads folder.'
+                          : (result.error ?? 'Could not save the package.')
+                      )
+                    })
+                    .catch((cause: unknown) => setBrowserActionMessage(describeError(cause)))
+                    .finally(() => setBrowserBusy(null))
+                }}
+              >
+                {firefoxDownloaded ? (
+                  <>
+                    <Download className="mr-1 size-4" />
+                    Downloaded
+                  </>
+                ) : browserBusy === 'firefox-download' ? (
+                  'Downloading…'
+                ) : (
+                  'Download Firefox extension'
+                )}
+              </Button>
             </div>
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
-              <li>Press <strong>Download extension</strong>. Sonic saves <strong>SDMFFE.xpi</strong> to your Downloads folder automatically.</li>
-              <li>Press <strong>Open Firefox Add-ons</strong> to open Firefox Add-ons Manager.</li>
+              <li>
+                Press <strong>Download extension</strong>. Sonic saves <strong>SDMFFE.xpi</strong>{' '}
+                to your Downloads folder automatically.
+              </li>
+              <li>
+                Press <strong>Open Firefox Add-ons</strong> to open Firefox Add-ons Manager.
+              </li>
               <li>In the top-right area, click the settings gear icon.</li>
-              <li>Choose <strong>Install Add-on From File…</strong>.</li>
-              <li>Open your Downloads folder, select <strong>SDMFFE.xpi</strong>, and click Open.</li>
-              <li>When Firefox asks for confirmation, click <strong>Add</strong>. The Sonic Download Manager extension is installed.</li>
+              <li>
+                Choose <strong>Install Add-on From File…</strong>.
+              </li>
+              <li>
+                Open your Downloads folder, select <strong>SDMFFE.xpi</strong>, and click Open.
+              </li>
+              <li>
+                When Firefox asks for confirmation, click <strong>Add</strong>. The Sonic Download
+                Manager extension is installed.
+              </li>
             </ol>
           </div>
-          {browserActionMessage && <p role="status" className="break-all text-xs text-muted-foreground">{browserActionMessage}</p>}
+          {browserActionMessage && (
+            <p role="status" className="break-all text-xs text-muted-foreground">
+              {browserActionMessage}
+            </p>
+          )}
         </section>
         <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
-          <h3 className="font-sans text-[14px] leading-none font-semibold">Tags & automatic rules</h3>
+          <h3 className="font-sans text-[14px] leading-none font-semibold">
+            Tags & automatic rules
+          </h3>
           <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            Sonic assigns basic category tags automatically. Manage available tags and destination rules here; removing a tag also removes it from existing assignments.
+            Sonic assigns basic category tags automatically. Manage available tags and destination
+            rules here; removing a tag also removes it from existing assignments.
           </p>
-          <Button type="button" variant="secondary" size="sm" className="self-start" onClick={() => setTagsRulesOpen(true)}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="self-start"
+            onClick={() => setTagsRulesOpen(true)}
+          >
             <Tags data-icon="inline-start" /> Manage tags & rules
           </Button>
         </section>
@@ -428,160 +554,14 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
             setDraft((previous) => ({ ...previous, downloadSchedule }))
           }
         />
-        <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
-          <h3 className="font-sans text-[14px] leading-none font-semibold">Software updates</h3>
-          <label className="flex items-center justify-between text-sm">
-            Automatic software updates{' '}
-            <input
-              type="checkbox"
-              checked={autoUpdateEnabled}
-              onChange={(event) => {
-                const enabled = event.currentTarget.checked
-                setAutoUpdateEnabled(enabled)
-                void window.sonic
-                  .updateSettings({ autoUpdateEnabled: enabled })
-                  .then(() => useAppStore.setState({ autoUpdateEnabled: enabled }))
-              }}
-            />
-          </label>
-          <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            Automatically check for updates while Sonic is running, or disable automatic updates and
-            check manually here.
-          </p>
 
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={updateBusy}
-            onClick={() => {
-              setUpdateBusy(true)
-              setUpdateResult(null)
-              void window.sonic
-                .checkForUpdate(updateRepository)
-                .then(setUpdateResult)
-                .catch((cause: unknown) =>
-                  setUpdateResult({
-                    configured: true,
-                    currentVersion: 'unknown',
-                    error: describeError(cause)
-                  })
-                )
-                .finally(() => setUpdateBusy(false))
-            }}
-          >
-            {updateBusy ? 'Checkingâ€¦' : 'Check for updates'}
-          </Button>
-          {updateResult && (
-            <div role="status" className="break-words text-xs text-muted-foreground">
-              {updateResult.error
-                ? updateResult.error
-                : updateResult.updateAvailable
-                  ? 'Update available: ' + updateResult.latestVersion
-                  : 'Sonic is up to date (installed ' +
-                    updateResult.currentVersion +
-                    ', latest ' +
-                    updateResult.latestVersion +
-                    ').'}
-              {updateResult.releaseNotes && (
-                <p className="mt-2 whitespace-pre-wrap">{updateResult.releaseNotes}</p>
-              )}
-              {updateResult.releaseUrl && (
-                <p className="mt-2">
-                  <a
-                    className="underline"
-                    href={updateResult.releaseUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open release page and notes
-                  </a>
-                </p>
-              )}
-              {updateResult.verificationError && (
-                <p className="mt-2">{updateResult.verificationError}</p>
-              )}
-              {updateResult.assetName && updateResult.assetSha256 && (
-                <div className="mt-2 space-y-2">
-                  <p>
-                    Publisher signature verified for {updateResult.assetName}. Signed SHA-256:{' '}
-                    <span className="break-all font-mono">{updateResult.assetSha256}</span>
-                  </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={updateDownloadBusy}
-                    onClick={() => {
-                      setUpdateDownloadBusy(true)
-                      setUpdateActionMessage(null)
-                      setVerifiedUpdate(null)
-                      void window.sonic
-                        .downloadVerifiedUpdate(updateRepository.trim())
-                        .then((result) => {
-                          setVerifiedUpdate(result)
-                          setUpdateActionMessage(
-                            'Installer downloaded and SHA-256 verified: ' +
-                              result.fileName +
-                              '. Hash: ' +
-                              result.sha256
-                          )
-                        })
-                        .catch((cause: unknown) =>
-                          setUpdateActionMessage('Update download blocked: ' + describeError(cause))
-                        )
-                        .finally(() => setUpdateDownloadBusy(false))
-                    }}
-                  >
-                    {updateDownloadBusy
-                      ? 'Downloading and verifyingâ€¦'
-                      : 'Download and verify installer'}
-                  </Button>
-                </div>
-              )}
-              {verifiedUpdate && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    setUpdateActionMessage('')
-                    void window.sonic
-                      .openVerifiedUpdate(verifiedUpdate.operationId)
-                      .then((result) =>
-                        setUpdateActionMessage(
-                          result.opened
-                            ? 'Verified installer opened. Follow the installer prompts; close Sonic first if requested.'
-                            : 'Installer could not be opened: ' + (result.error ?? 'unknown error')
-                        )
-                      )
-                      .catch((cause: unknown) =>
-                        setUpdateActionMessage('Installer launch blocked: ' + describeError(cause))
-                      )
-                  }}
-                >
-                  Open verified installer
-                </Button>
-              )}
-              {updateActionMessage && (
-                <p role="status" className="mt-2 break-all">
-                  {updateActionMessage}
-                </p>
-              )}
-              {updateResult.updateAvailable && (
-                <p className="mt-2">
-                  Sonic does not run downloaded code automatically. The installer is opened only
-                  after signature and SHA-256 verification and an explicit click. Installer rollback
-                  is not provided by this updater.
-                </p>
-              )}
-            </div>
-          )}
-        </section>
         <section className="flex flex-col gap-2.5 border-t-[0.5px] border-border py-3">
           <h3 className="font-sans text-[14px] leading-none font-semibold">{t('backupStorage')}</h3>
           <p className="text-[12.5px] leading-snug text-[var(--text-secondary)]">
-            Export settings separately from download history. Settings backups contain Sonic preferences; history backups contain finished-download records. Older full Sonic backups can also be restored, including saved queue metadata. Keep backups in a trusted location.
+            Export settings separately from download history. Settings backups contain Sonic
+            preferences; history backups contain finished-download records. Older full Sonic backups
+            can also be restored, including saved queue metadata. Keep backups in a trusted
+            location.
           </p>
           <p className="break-all text-xs text-muted-foreground">
             {storageInfo ? 'Storage: ' + storageInfo.userDataDir : 'Checking storage location…'}
@@ -592,7 +572,10 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
               variant="secondary"
               size="sm"
               disabled={storageBusy}
-              onClick={() => { setExportChoiceOpen((open) => !open); setStorageMessage(null) }}
+              onClick={() => {
+                setExportChoiceOpen((open) => !open)
+                setStorageMessage(null)
+              }}
             >
               {t('exportBackup')}
             </Button>
@@ -610,13 +593,31 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
             <div className="flex flex-col gap-2 rounded-md border border-border p-3">
               <p className="text-sm font-medium">What would you like to export?</p>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant="secondary" disabled={storageBusy} onClick={() => void runStorageAction('export', 'settings')}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={storageBusy}
+                  onClick={() => void runStorageAction('export', 'settings')}
+                >
                   Export settings
                 </Button>
-                <Button type="button" size="sm" variant="secondary" disabled={storageBusy} onClick={() => void runStorageAction('export', 'history')}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={storageBusy}
+                  onClick={() => void runStorageAction('export', 'history')}
+                >
                   Export download history
                 </Button>
-                <Button type="button" size="sm" variant="ghost" disabled={storageBusy} onClick={() => setExportChoiceOpen(false)}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={storageBusy}
+                  onClick={() => setExportChoiceOpen(false)}
+                >
                   Cancel
                 </Button>
               </div>

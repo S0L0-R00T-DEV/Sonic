@@ -65,6 +65,11 @@ const sonicApi = {
   probeUrl: (url: string) => invoke('probeUrl', url),
   checkForUpdate: (repository: string) => invoke('checkForUpdate', repository),
   downloadVerifiedUpdate: (repository: string) => invoke('downloadVerifiedUpdate', repository),
+  onUpdateDownloadProgress: (callback: (progress: import('../shared/types').UpdateDownloadProgress) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, progress: import('../shared/types').UpdateDownloadProgress): void => callback(progress)
+    ipcRenderer.on(IpcChannels.updateDownloadProgress, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.updateDownloadProgress, listener)
+  },
   openVerifiedUpdate: (operationId: string) => invoke('openVerifiedUpdate', operationId),
   verifyFileSha256: (expectedHash: string) => invoke('verifyFileSha256', expectedHash),
   fingerprintPublisherKey: (publicKeyPem: string) =>
@@ -172,7 +177,19 @@ const sonicApi = {
   revokeRemoteDevice: (deviceId: string) => invoke('revokeRemoteDevice', deviceId),
   exportRemoteCaCertificate: () => invoke('exportRemoteCaCertificate'),
 
-  /** pendingLinks() has the new link. */
+  onUpdateDetected: (callback: (version: string) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, version: string): void => callback(version)
+    ipcRenderer.on(IpcChannels.updateDetected, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.updateDetected, listener)
+  },
+
+  /** A user clicked the OS update notification; bring the About dialog forward. */
+  onUpdateAvailable: (callback: (version: string) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, version: string): void => callback(version)
+    ipcRenderer.on(IpcChannels.updateAvailable, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.updateAvailable, listener)
+  },
+
   onLinkReceived: (callback: () => void): (() => void) => {
     const listener = (): void => callback()
     ipcRenderer.on(IpcChannels.linkReceived, listener)

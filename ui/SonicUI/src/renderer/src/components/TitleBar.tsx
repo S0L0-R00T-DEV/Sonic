@@ -1,4 +1,4 @@
-import { Minus, Maximize2, X, Settings } from 'lucide-react'
+import { Minus, Maximize2, X, Settings, Info } from 'lucide-react'
 import { TITLE_BAR_HEIGHT } from '../theme'
 import { useLocale } from '../i18n'
 import sonicBlueLogo from '../assets/brand/sonic-blue.png'
@@ -6,7 +6,15 @@ import sonicBlueLogo from '../assets/brand/sonic-blue.png'
 const isMac = window.sonic.platform === 'darwin'
 
 /** App-owned controls use macOS-style traffic-light buttons on non-macOS platforms. */
-export function TitleBar({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
+export function TitleBar({
+  onOpenSettings,
+  onOpenAbout,
+  updateAvailable
+}: {
+  onOpenSettings: () => void
+  onOpenAbout: () => void
+  updateAvailable: boolean
+}): React.JSX.Element {
   const { t } = useLocale()
   const logo = sonicBlueLogo
   const buttonBase =
@@ -20,7 +28,10 @@ export function TitleBar({ onOpenSettings }: { onOpenSettings: () => void }): Re
       className="relative flex shrink-0 items-center justify-center border-b-[0.5px] border-border bg-card px-[140px] [-webkit-app-region:no-drag]"
     >
       {/* Keep window dragging on a very thin strip; the rest of the title bar remains a valid file-drop target. */}
-      <div aria-hidden="true" className="absolute inset-x-0 top-0 z-0 h-1 [-webkit-app-region:drag]" />
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 z-0 h-1 [-webkit-app-region:drag]"
+      />
       <button
         type="button"
         aria-label={t('openSettings')}
@@ -29,6 +40,22 @@ export function TitleBar({ onOpenSettings }: { onOpenSettings: () => void }): Re
         className="absolute left-2 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-md bg-transparent text-[var(--text-secondary)] transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [-webkit-app-region:no-drag]"
       >
         <Settings size={16} strokeWidth={1.7} />
+      </button>
+
+      <button
+        type="button"
+        aria-label="About Sonic"
+        title={updateAvailable ? 'About Sonic — update available' : 'About Sonic'}
+        onClick={onOpenAbout}
+        className="absolute left-11 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-md bg-transparent text-[var(--text-secondary)] transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [-webkit-app-region:no-drag]"
+      >
+        <Info size={16} strokeWidth={1.7} />
+        {updateAvailable && (
+          <span
+            aria-label="Update available"
+            className="absolute right-1 top-1 size-2 rounded-full border border-card bg-red-500"
+          />
+        )}
       </button>
 
       <div className="flex min-w-0 items-center justify-center gap-2 font-sans text-[13px] leading-none font-semibold text-[var(--text-secondary)] [-webkit-app-region:no-drag]">

@@ -40,9 +40,29 @@ jobs:
           [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
           "CSC_LINK=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CSC_KEY_PASSWORD=$env:WINDOWS_CERTIFICATE_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Pin update publisher key in the application
+        shell: pwsh
+        env:
+          SONIC_UPDATE_SIGNING_KEY_PEM: ${{ secrets.SONIC_UPDATE_SIGNING_KEY_PEM }}
+        run: |
+          if (-not $env:SONIC_UPDATE_SIGNING_KEY_PEM) {
+            throw 'Release blocked: configure SONIC_UPDATE_SIGNING_KEY_PEM as a protected GitHub Actions secret.'
+          }
+          node ./ui/SonicUI/scripts/generate-update-trust.mjs
       - name: Build signed application, CLI, and browser extension
         shell: pwsh
         run: .\build.ps1 -Release
+      - name: Create signed update manifest
+        shell: pwsh
+        env:
+          SONIC_UPDATE_SIGNING_KEY_PEM: ${{ secrets.SONIC_UPDATE_SIGNING_KEY_PEM }}
+          SONIC_UPDATE_SIGNING_KEY_ID: ${{ vars.SONIC_UPDATE_SIGNING_KEY_ID }}
+        run: |
+          if (-not $env:SONIC_UPDATE_SIGNING_KEY_PEM) {
+            throw 'Release blocked: configure SONIC_UPDATE_SIGNING_KEY_PEM as a protected GitHub Actions secret.'
+          }
+          $version = node -p "require('./ui/SonicUI/package.json').version"
+          node ./ui/SonicUI/scripts/create-signed-update-manifest.mjs $version ./ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe win32 ./ui/SonicUI/dist-sonic-release/sonic-update-manifest.json
       - uses: actions/upload-artifact@v4
         with:
           name: sonic-windows-release
@@ -51,6 +71,7 @@ jobs:
             ui/SonicUI/dist-sonic-release/Sonic-CLI-win-x64.zip
             ui/SonicUI/dist-sonic-release/Sonic-Extension-Chrome.zip
             ui/SonicUI/dist-sonic-release/Sonic-Extension-Firefox.zip
+            ui/SonicUI/dist-sonic-release/sonic-update-manifest.json
           if-no-files-found: error
       - name: Publish GitHub release
         if: github.event_name == 'push'
@@ -64,4 +85,5 @@ jobs:
             ui/SonicUI/dist-sonic-release/Sonic-CLI-win-x64.zip `
             ui/SonicUI/dist-sonic-release/Sonic-Extension-Chrome.zip `
             ui/SonicUI/dist-sonic-release/Sonic-Extension-Firefox.zip `
+            ui/SonicUI/dist-sonic-release/sonic-update-manifest.json `
             --title $env:TAG --generate-notes
