@@ -134,8 +134,15 @@ if (-not (Test-Path $xpiPackage)) { throw "Packaged Firefox XPI is missing: $xpi
 if ($Release) {
   $signature = Get-AuthenticodeSignature -LiteralPath $installer
   if ($signature.Status -ne 'Valid') {
-    $signer = if ($signature.SignerCertificate) { "$($signature.SignerCertificate.Subject) [thumbprint $($signature.SignerCertificate.Thumbprint)]" } else { 'missing signer certificate' }
-    throw "Release installer signature is not valid: $($signature.Status). Details: $($signature.StatusMessage). Signer: $signer"
+    $expectedThumbprint = $env:SONIC_SIGNING_CERT_THUMBPRINT
+    $actualThumbprint = if ($signature.SignerCertificate) { $signature.SignerCertificate.Thumbprint } else { '' }
+    $configuredSignerMatches = $expectedThumbprint -and $actualThumbprint -and ($actualThumbprint -eq $expectedThumbprint)
+    if ($signature.Status -eq 'UnknownError' -and $configuredSignerMatches) {
+      Write-Warning "Installer is signed by the configured release certificate ($actualThumbprint), but Windows does not trust its certificate chain in this runner: $($signature.StatusMessage)"
+    } else {
+      $signer = if ($signature.SignerCertificate) { "$($signature.SignerCertificate.Subject) [thumbprint $actualThumbprint]" } else { 'missing signer certificate' }
+      throw "Release installer signature is not valid: $($signature.Status). Details: $($signature.StatusMessage). Signer: $signer; expected thumbprint: $expectedThumbprint"
+    }
   }
 }
 

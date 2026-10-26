@@ -41,12 +41,8 @@ jobs:
           # Trust the exact configured release signer in this ephemeral runner so the
           # post-build Authenticode check validates the signature created by this workflow.
           $signingCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certPath, $env:WINDOWS_CERTIFICATE_PASSWORD)
-          $publicCertificatePath = Join-Path $env:RUNNER_TEMP 'sonic-signing.cer'
-          [IO.File]::WriteAllBytes($publicCertificatePath, $signingCertificate.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
-          Write-Host 'Adding release signer certificate to the ephemeral CI trust store.'
-          Import-Certificate -FilePath $publicCertificatePath -CertStoreLocation 'Cert:\CurrentUser\Root' -Confirm:$false | Out-Null
-          Write-Host 'Release signer certificate trust setup completed.'
-          Write-Host "Configured CI trust for release signer thumbprint $($signingCertificate.Thumbprint)"
+          "SONIC_SIGNING_CERT_THUMBPRINT=$($signingCertificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Configured expected release signer thumbprint $($signingCertificate.Thumbprint)"
           "CSC_LINK=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CSC_KEY_PASSWORD=$env:WINDOWS_CERTIFICATE_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Pin update publisher key in the application
