@@ -141,7 +141,8 @@ if (Test-Path $cliZip) { Remove-Item -LiteralPath $cliZip -Force }
 Compress-Archive -Path (Join-Path $cliOutput '*') -DestinationPath $cliZip -CompressionLevel Optimal
 foreach ($browser in @('chromium','firefox')) {
   $extensionSource = Join-Path $ui "extension\dist\$browser"
-  $extensionZip = Join-Path $releaseOutput "Sonic-Extension-$((Get-Culture).TextInfo.ToTitleCase($browser)).zip"
+  $extensionLabel = if ($browser -eq 'chromium') { 'Chrome' } else { 'Firefox' }
+  $extensionZip = Join-Path $releaseOutput "Sonic-Extension-$extensionLabel.zip"
   if (-not (Test-Path $extensionSource)) { throw "Browser extension build output is missing: $extensionSource" }
   if (Test-Path $extensionZip) { Remove-Item -LiteralPath $extensionZip -Force }
   Compress-Archive -Path (Join-Path $extensionSource '*') -DestinationPath $extensionZip -CompressionLevel Optimal
@@ -149,7 +150,8 @@ foreach ($browser in @('chromium','firefox')) {
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 foreach ($browser in @('chromium','firefox')) {
-  $extensionZip = Join-Path $releaseOutput "Sonic-Extension-$((Get-Culture).TextInfo.ToTitleCase($browser)).zip"
+  $extensionLabel = if ($browser -eq 'chromium') { 'Chrome' } else { 'Firefox' }
+  $extensionZip = Join-Path $releaseOutput "Sonic-Extension-$extensionLabel.zip"
   $archive = [IO.Compression.ZipFile]::OpenRead($extensionZip)
   try {
     $entries = @($archive.Entries | ForEach-Object { $_.FullName.Replace([char]92, [char]47) })
