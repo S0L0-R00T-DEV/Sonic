@@ -41,13 +41,10 @@ jobs:
           # Trust the exact configured release signer in this ephemeral runner so the
           # post-build Authenticode check validates the signature created by this workflow.
           $signingCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certPath, $env:WINDOWS_CERTIFICATE_PASSWORD)
-          $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'CurrentUser')
-          $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-          try {
-            if (-not ($rootStore.Certificates | Where-Object { $_.Thumbprint -eq $signingCertificate.Thumbprint })) {
-              $rootStore.Add($signingCertificate)
-            }
-          } finally { $rootStore.Close() }
+          $publicCertificatePath = Join-Path $env:RUNNER_TEMP 'sonic-signing.cer'
+          [IO.File]::WriteAllBytes($publicCertificatePath, $signingCertificate.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+          $trustOutput = & certutil.exe -f -user -addstore Root $publicCertificatePath 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Could not configure CI trust for release signer: $($trustOutput -join ' ')" }
           Write-Host "Configured CI trust for release signer thumbprint $($signingCertificate.Thumbprint)"
           "CSC_LINK=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "CSC_KEY_PASSWORD=$env:WINDOWS_CERTIFICATE_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
