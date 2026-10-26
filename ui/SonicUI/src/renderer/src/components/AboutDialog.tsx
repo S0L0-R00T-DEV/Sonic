@@ -77,7 +77,12 @@ export function AboutDialog({
     void window.sonic
       .downloadVerifiedUpdate(UPDATE_REPOSITORY)
       .then(async (download) => {
-        setUpdateProgress({ bytesDownloaded: 0, totalBytes: 0, percent: 100, phase: 'starting-installer' })
+        setUpdateProgress({
+          bytesDownloaded: 0,
+          totalBytes: 0,
+          percent: 100,
+          phase: 'starting-installer'
+        })
         const started = await window.sonic.openVerifiedUpdate(download.operationId)
         if (!started.opened) {
           setMessage(
@@ -109,7 +114,9 @@ export function AboutDialog({
             </div>
             <div className="min-w-0">
               <h2 className="text-lg font-semibold">Sonic Download Manager</h2>
-              <p className="mt-1 text-sm font-medium text-foreground">Installed version: {installedVersion}</p>
+              <p className="mt-1 text-sm font-medium text-foreground">
+                Installed version: {installedVersion}
+              </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 A desktop download manager for organizing downloads, managing queues, and
                 integrating with your browsers.
@@ -184,12 +191,7 @@ export function AboutDialog({
                       </p>
                     )}
                     {result.assetName && result.assetSha256 && !result.verificationError ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={installing}
-                        onClick={installUpdate}
-                      >
+                      <Button type="button" size="sm" disabled={installing} onClick={installUpdate}>
                         {installing ? (
                           <>
                             <LoaderCircle className="mr-2 size-4 animate-spin" />
@@ -204,7 +206,9 @@ export function AboutDialog({
                       </Button>
                     ) : (
                       <p className="text-xs text-amber-600">
-                        This development build does not include the release publisher trust key, so installation cannot be tested from this build. Signed release builds embed that key and install verified updates directly in Sonic.
+                        This development build does not include the release publisher trust key, so
+                        installation cannot be tested from this build. Signed release builds embed
+                        that key and install verified updates directly in Sonic.
                       </p>
                     )}
                   </div>
@@ -217,18 +221,44 @@ export function AboutDialog({
               </div>
             )}
             {installing && updateProgress && (
-              <div role="dialog" aria-label="Downloading Sonic update" className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div
+                role="dialog"
+                aria-label="Downloading Sonic update"
+                className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-sm"
+              >
                 <div className="flex items-center gap-2">
                   <LoaderCircle className="size-4 animate-spin text-primary" />
                   <p className="font-medium text-foreground">
-                    {updateProgress.phase === 'downloading' ? 'Downloading update…' : updateProgress.phase === 'verifying' ? 'Verifying downloaded update…' : 'Starting installer…'}
+                    {updateProgress.phase === 'downloading'
+                      ? 'Downloading update…'
+                      : updateProgress.phase === 'verifying'
+                        ? 'Verifying downloaded update…'
+                        : 'Starting installer…'}
                   </p>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-label="Update download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={updateProgress.percent}>
-                  <div className="h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${updateProgress.percent}%` }} />
+                <div
+                  className="h-2 overflow-hidden rounded-full bg-secondary"
+                  role="progressbar"
+                  aria-label="Update download progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={updateProgress.percent}
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-150"
+                    style={{ width: `${updateProgress.percent}%` }}
+                  />
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{updateProgress.phase === 'downloading' ? (updateProgress.totalBytes > 0 ? `${(updateProgress.bytesDownloaded / 1024 / 1024).toFixed(1)} / ${(updateProgress.totalBytes / 1024 / 1024).toFixed(1)} MB` : 'Receiving installer…') : updateProgress.phase === 'verifying' ? 'Download complete' : '100%'}</span>
+                  <span>
+                    {updateProgress.phase === 'downloading'
+                      ? updateProgress.totalBytes > 0
+                        ? `${(updateProgress.bytesDownloaded / 1024 / 1024).toFixed(1)} / ${(updateProgress.totalBytes / 1024 / 1024).toFixed(1)} MB`
+                        : 'Receiving installer…'
+                      : updateProgress.phase === 'verifying'
+                        ? 'Download complete'
+                        : '100%'}
+                  </span>
                   <span>{updateProgress.percent}%</span>
                 </div>
               </div>

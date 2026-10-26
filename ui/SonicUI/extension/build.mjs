@@ -68,7 +68,8 @@ for (const [browser, manifest] of Object.entries(manifests)) {
     ...Object.values(manifest.action.default_icon),
     ...(manifest.background.service_worker
       ? [manifest.background.service_worker]
-      : manifest.background.scripts ?? (manifest.background.page ? [manifest.background.page] : []))
+      : (manifest.background.scripts ??
+        (manifest.background.page ? [manifest.background.page] : [])))
   ])
   for (const asset of requiredAssets) {
     try {

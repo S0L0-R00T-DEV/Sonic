@@ -76,7 +76,7 @@ const messages: Record<string, string> = {
   checkConnection: 'Check connection',
   connectionConnected: 'Connected: the extension checked in recently.',
   connectionNotConnected:
-    'Not connected. Enable the Sonic extension, keep Sonic running, then check again.',
+    'Not connected. Enable the Sonic extension, keep Sonic running, then check again.'
 }
 const LocaleContext = createContext<LocaleContextValue | null>(null)
 

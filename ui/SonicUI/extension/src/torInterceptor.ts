@@ -22,12 +22,22 @@ function isDownloadResponse(details: TorResponseDetails): boolean {
   // A binary MIME type is only a useful signal for navigations or download-like requests;
   // do not capture embedded images, scripts, stylesheets, or media streams.
   if (!['main_frame', 'sub_frame', 'other', 'xmlhttprequest'].includes(details.type)) return false
-  const mime = headerValue(details.responseHeaders, 'content-type').split(';', 1)[0].trim().toLowerCase()
+  const mime = headerValue(details.responseHeaders, 'content-type')
+    .split(';', 1)[0]
+    .trim()
+    .toLowerCase()
   return [
-    'application/octet-stream', 'application/zip', 'application/x-zip-compressed',
-    'application/x-7z-compressed', 'application/x-rar-compressed', 'application/x-tar',
-    'application/gzip', 'application/x-gzip', 'application/x-msdownload',
-    'application/vnd.microsoft.portable-executable', 'application/pdf',
+    'application/octet-stream',
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-7z-compressed',
+    'application/x-rar-compressed',
+    'application/x-tar',
+    'application/gzip',
+    'application/x-gzip',
+    'application/x-msdownload',
+    'application/vnd.microsoft.portable-executable',
+    'application/pdf',
     'application/x-bittorrent'
   ].includes(mime)
 }

@@ -96,9 +96,11 @@ async function checkForUpdatesInBackground(): Promise<void> {
     const openWindow = mainWindow
     if (openWindow && !openWindow.isDestroyed()) {
       const notifyRenderer = (): void => {
-        if (!openWindow.isDestroyed()) openWindow.webContents.send('updater:detected', result.latestVersion)
+        if (!openWindow.isDestroyed())
+          openWindow.webContents.send('updater:detected', result.latestVersion)
       }
-      if (openWindow.webContents.isLoading()) openWindow.webContents.once('did-finish-load', notifyRenderer)
+      if (openWindow.webContents.isLoading())
+        openWindow.webContents.once('did-finish-load', notifyRenderer)
       else notifyRenderer()
     }
     if (lastNotifiedUpdateVersion === result.latestVersion) return

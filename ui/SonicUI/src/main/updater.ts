@@ -221,7 +221,12 @@ export async function downloadVerifiedUpdate(
   if (!response.ok) throw new Error(`Installer download failed (HTTP ${response.status}).`)
   if (typeof asset.size === 'number' && asset.size > MAX_UPDATE_BYTES)
     throw new Error('Update installer exceeds the 1 GiB safety limit.')
-  onProgress?.({ bytesDownloaded: 0, totalBytes: asset.size ?? 0, percent: 0, phase: 'downloading' })
+  onProgress?.({
+    bytesDownloaded: 0,
+    totalBytes: asset.size ?? 0,
+    percent: 0,
+    phase: 'downloading'
+  })
   const bytes = await readBoundedBody(
     response,
     MAX_UPDATE_BYTES,
@@ -237,7 +242,12 @@ export async function downloadVerifiedUpdate(
     asset.size ?? 0
   )
   if (bytes.byteLength === 0) throw new Error('Downloaded installer is empty.')
-  onProgress?.({ bytesDownloaded: bytes.byteLength, totalBytes: bytes.byteLength, percent: 100, phase: 'verifying' })
+  onProgress?.({
+    bytesDownloaded: bytes.byteLength,
+    totalBytes: bytes.byteLength,
+    percent: 100,
+    phase: 'verifying'
+  })
   const actual = createHash('sha256').update(bytes).digest('hex')
   if (actual !== verified.sha256)
     throw new Error(
@@ -250,7 +260,12 @@ export async function downloadVerifiedUpdate(
   const path = join(directory, `${operationId}-${safeName}`)
   await writeFile(path, bytes, { flag: 'wx', mode: 0o600 })
   pendingVerifiedUpdates.set(operationId, { path, sha256: actual, fileName: safeName })
-  onProgress?.({ bytesDownloaded: bytes.byteLength, totalBytes: bytes.byteLength, percent: 100, phase: 'starting-installer' })
+  onProgress?.({
+    bytesDownloaded: bytes.byteLength,
+    totalBytes: bytes.byteLength,
+    percent: 100,
+    phase: 'starting-installer'
+  })
   return { operationId, fileName: safeName, sha256: actual }
 }
 
@@ -272,7 +287,8 @@ export async function openVerifiedUpdate(
   if (!app.isPackaged)
     return {
       opened: false,
-      error: 'The development app can preview the updater UI, but it will not launch an installer. Test installation from the signed, installed Sonic release.'
+      error:
+        'The development app can preview the updater UI, but it will not launch an installer. Test installation from the signed, installed Sonic release.'
     }
   const bytes = await readFile(pending.path)
   if (createHash('sha256').update(bytes).digest('hex') !== pending.sha256) {
@@ -287,11 +303,15 @@ export async function openVerifiedUpdate(
     // Keep this supervisor alive after Sonic exits: it waits for NSIS to finish, then starts the
     // newly installed executable. This is reliable even for a silent installer with no UI.
     const command = `$ErrorActionPreference = 'Stop'; $installer = ${installerPath}; $application = ${applicationPath}; Start-Process -FilePath $installer -ArgumentList '/S' -Wait; if (Test-Path -LiteralPath $application) { Start-Process -FilePath $application }`
-    const supervisor = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true
-    })
+    const supervisor = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', command],
+      {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    )
     supervisor.once('error', (error) => {
       if (settled) return
       settled = true
