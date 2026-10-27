@@ -129,9 +129,9 @@ async function checkForUpdatesInBackground(): Promise<void> {
 
 function ensureTray(): void {
   if (tray) return
-  tray = new Tray(currentBrandIcon())
+  tray = new Tray(currentBrandIcon(getSonicThemeSource()))
   tray.setToolTip('Sonic')
-  registerBrandTray(tray)
+  registerBrandTray(tray, getSonicThemeSource())
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open Sonic', click: showMainWindow },
@@ -160,7 +160,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     title: 'Sonic',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#050505' : '#fffdf5',
-    ...(process.platform !== 'darwin' ? { icon: currentBrandIcon() } : {}),
+    ...(process.platform !== 'darwin' ? { icon: currentBrandIcon(getSonicThemeSource()) } : {}),
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 9 } } : {}),
     webPreferences: {
@@ -170,7 +170,7 @@ function createWindow(): void {
     }
   })
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.setIcon(currentBrandIcon())
+    mainWindow?.setIcon(currentBrandIcon(getSonicThemeSource()))
     mainWindow?.show()
   })
   mainWindow.on('close', (event) => {
@@ -212,7 +212,7 @@ app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.speedofreq.sonic')
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
   await registerSonicBridge()
-  setBrandTheme()
+  setBrandTheme(getSonicThemeSource())
   nativeTheme.themeSource = getSonicThemeSource() === 'light' ? 'light' : 'dark'
   // Keep the desktop UI responsive even when the download backend is slow or unavailable.
   // Headless remote-control startup still waits for the backend below before enabling its listener.

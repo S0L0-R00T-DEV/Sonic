@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { CheckCircle2, Download, ExternalLink, Info, LoaderCircle, RefreshCw } from 'lucide-react'
 import { describeError } from '../utils/format'
 import sonicBlueLogo from '../assets/brand/sonic-blue.png'
+import sonicBlackLogo from '../assets/brand/sonic-black.png'
+import sonicRedLogo from '../assets/brand/sonic-red.png'
+import { useAppStore } from '../store/useAppStore'
 import { Button } from './ui/button'
+import { TermsOfServiceDialog } from './TermsOfServiceDialog'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 import type { UpdateDownloadProgress } from '../../../shared/types'
 
@@ -25,6 +29,10 @@ export function AboutDialog({
   const [installing, setInstalling] = useState(false)
   const [updateProgress, setUpdateProgress] = useState<UpdateDownloadProgress | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [termsOpen, setTermsOpen] = useState(false)
+  const themeSource = useAppStore((store) => store.themeSource)
+  const brandLogo =
+    themeSource === 'dark' ? sonicBlackLogo : themeSource === 'light' ? sonicRedLogo : sonicBlueLogo
   const installedVersion = window.sonic.initialState.appVersion ?? 'Unknown'
 
   useEffect(() => {
@@ -110,7 +118,7 @@ export function AboutDialog({
         <div className="flex flex-col gap-4 px-5 py-5">
           <div className="flex items-start gap-3">
             <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-secondary">
-              <img src={sonicBlueLogo} alt="" className="size-9 object-contain" />
+              <img src={brandLogo} alt="" className="size-9 object-contain" />
             </div>
             <div className="min-w-0">
               <h2 className="text-lg font-semibold">Sonic Download Manager</h2>
@@ -123,6 +131,17 @@ export function AboutDialog({
               </p>
             </div>
           </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="self-start"
+            onClick={() => setTermsOpen(true)}
+          >
+            <Info className="mr-2 size-4" />
+            Read Terms of Service
+          </Button>
 
           <a
             href={REPOSITORY_URL}
@@ -275,6 +294,7 @@ export function AboutDialog({
           </p>
         </div>
       </DialogContent>
+      <TermsOfServiceDialog open={termsOpen} onOpenChange={setTermsOpen} />
     </Dialog>
   )
 }

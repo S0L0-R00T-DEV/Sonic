@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
-import { app } from 'electron'
 
 /**
  * Test launches use a private user-data directory. Give each one its own local pipes so an
@@ -8,7 +7,9 @@ import { app } from 'electron'
  * use the stable public endpoint expected by SpeedOFreq.Cli.exe.
  */
 export function instancePipeSuffix(): string {
-  const userData = !app.isPackaged ? process.env['SONIC_USER_DATA'] : undefined
+  // If the CLI is pointed at an isolated profile, both packaged and development
+  // instances must derive the same pipe suffix from SONIC_USER_DATA.
+  const userData = process.env['SONIC_USER_DATA']
   if (!userData) return ''
 
   const resolved = resolve(userData)

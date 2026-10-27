@@ -2,6 +2,9 @@ import { Minus, Maximize2, X, Settings, Info } from 'lucide-react'
 import { TITLE_BAR_HEIGHT } from '../theme'
 import { useLocale } from '../i18n'
 import sonicBlueLogo from '../assets/brand/sonic-blue.png'
+import sonicBlackLogo from '../assets/brand/sonic-black.png'
+import sonicRedLogo from '../assets/brand/sonic-red.png'
+import { useAppStore } from '../store/useAppStore'
 
 const isMac = window.sonic.platform === 'darwin'
 
@@ -16,7 +19,9 @@ export function TitleBar({
   updateAvailable: boolean
 }): React.JSX.Element {
   const { t } = useLocale()
-  const logo = sonicBlueLogo
+  const themeSource = useAppStore((store) => store.themeSource)
+  const logo =
+    themeSource === 'dark' ? sonicBlackLogo : themeSource === 'light' ? sonicRedLogo : sonicBlueLogo
   const buttonBase =
     'group relative flex size-6 shrink-0 items-center justify-center rounded-full border border-black/15 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.35)] outline-none transition-[filter,transform] hover:brightness-95 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [-webkit-app-region:no-drag]'
   const glyphBase =

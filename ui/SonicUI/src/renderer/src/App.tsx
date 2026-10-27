@@ -4,6 +4,7 @@ import { AlertTriangle } from 'lucide-react'
 import { DownloadActionsProvider } from './components/DownloadActionsProvider'
 import { LimitsDialog } from './components/LimitsDialog'
 import { AboutDialog } from './components/AboutDialog'
+import { TERMS_ACCEPTED_KEY, TermsOfServiceDialog } from './components/TermsOfServiceDialog'
 import { NetworkBindingDialog } from './components/NetworkBindingDialog'
 import { NewDownloadDialog } from './components/NewDownloadDialog'
 import { StatusBar } from './components/StatusBar'
@@ -90,9 +91,19 @@ function RecoveryIssuesBanner({ issues }: { issues: RecoveryIssue[] }): React.JS
 }
 function App(): React.JSX.Element {
   const themeSource = useAppStore((store) => store.themeSource)
+  const [termsOpen, setTermsOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem(TERMS_ACCEPTED_KEY) !== '1'
+    } catch {
+      return true
+    }
+  })
   const [settingsOpen, setSettingsOpen] = useState(() => {
     try {
-      return window.localStorage.getItem('sonic-browser-setup-prompted-v2') !== '1'
+      return (
+        window.localStorage.getItem(TERMS_ACCEPTED_KEY) === '1' &&
+        window.localStorage.getItem('sonic-browser-setup-prompted-v2') !== '1'
+      )
     } catch {
       return false
     }
@@ -187,6 +198,20 @@ function App(): React.JSX.Element {
               open={aboutOpen}
               onOpenChange={setAboutOpen}
               updateNotificationVersion={updateNotificationVersion}
+            />
+            <TermsOfServiceDialog
+              open={termsOpen}
+              onOpenChange={setTermsOpen}
+              mandatory
+              onAccept={() => {
+                try {
+                  if (window.localStorage.getItem('sonic-browser-setup-prompted-v2') !== '1') {
+                    setSettingsOpen(true)
+                  }
+                } catch {
+                  // Terms acceptance remains usable if local storage is unavailable.
+                }
+              }}
             />
           </div>
         </DownloadActionsProvider>

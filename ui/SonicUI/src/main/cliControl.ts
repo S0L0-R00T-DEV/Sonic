@@ -25,7 +25,9 @@ export function startCliControlServer(dispatch: CliDispatcher): void {
     socket.setEncoding('utf8')
     // Torrent metadata lookup may need several seconds to find a peer. Keep the control pipe
     // open long enough for the CLI client to receive the command's final result.
-    socket.setTimeout(120_000)
+    // Magnet metadata discovery can take up to the configured three-minute peer lookup budget.
+    // Keep the IPC deadline longer than that so the client receives the actual result/error.
+    socket.setTimeout(240_000)
     let input = ''
     let answered = false
     let handling = false

@@ -80,3 +80,12 @@ credentials.*
 /ui/SonicUI/dist-sonic-*/
 /tests/
 /ui/SonicUI/tests/
+
+# Local CLI audit fixtures and disposable user-data profiles
+/test-cli-*/
+/temp-cli-*.cjs
+/temp-make-magnet-fixture.cjs
+/test-batch.json
+/test-cli-magnet-fixture.torrent
+/ui/SonicUI/.dev-user-data/
+/ui/SonicUI/electron-launch-check.txt

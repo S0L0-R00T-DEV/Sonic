@@ -842,7 +842,7 @@ export async function registerSonicBridge(): Promise<void> {
     for (const key of Object.keys(settings) as (keyof AppSettings)[]) delete settings[key]
     Object.assign(settings, DEFAULT_SETTINGS, persisted)
     nativeTheme.themeSource = settings.themeSource === 'light' ? 'light' : 'dark'
-    setBrandTheme()
+    setBrandTheme(settings.themeSource ?? 'sonic')
     lastPolicySignature = null
     const snapshot = settingsSnapshot()
     for (const window of BrowserWindow.getAllWindows()) {
@@ -1666,6 +1666,27 @@ export async function registerSonicBridge(): Promise<void> {
         'browser-extension-used': 'browserExtensionUsed'
       }
       const key = keyMap[keyValue] ?? keyValue
+      const supportedKeys = new Set<keyof AppSettings>([
+        'completionAction',
+        'downloadSchedule',
+        'themeSource',
+        'destinationDir',
+        'networkPreferences',
+        'downloadsAtOnce',
+        'slowMode',
+        'slowModeSpeed',
+        'speedUnit',
+        'browserExtensionUsed',
+        'customTags',
+        'downloadTags',
+        'destinationRules',
+        'publisherPublicKeyPem',
+        'publisherKeyFingerprint',
+        'updateRepository',
+        'autoUpdateEnabled'
+      ])
+      if (!supportedKeys.has(key as keyof AppSettings))
+        throw new Error('Unsupported settings key: ' + keyValue)
       let normalized: unknown = value
       if (key === 'themeSource') {
         normalized = String(value).toLowerCase()
@@ -1815,6 +1836,110 @@ export async function registerSonicBridge(): Promise<void> {
     const id = textOf('id', 'downloadId', 'download-id')
     const argValue = request.value ?? request.mode ?? request.state ?? request.enabled
     switch (command) {
+      case 'health':
+      case 'ping':
+        return {
+          ok: true,
+          application: 'Sonic',
+          version: app.getVersion(),
+          uptimeSeconds: Math.floor(process.uptime()),
+          platform: process.platform,
+          electron: process.versions.electron,
+          node: process.versions.node,
+          cliProtocol: 'SpeedOFreqSonic.AppControl.v2'
+        }
+      case 'capabilities':
+      case 'commands':
+        return {
+          application: 'Sonic',
+          version: app.getVersion(),
+          output: 'JSON',
+          commandGroups: [
+            { name: 'discovery', commands: ['health', 'capabilities', 'status', 'recovery'] },
+            {
+              name: 'downloads',
+              commands: [
+                'download-stats',
+                'downloads',
+                'analyze',
+                'add-batch',
+                'add',
+                'start',
+                'pause',
+                'resume',
+                'cancel',
+                'pause-all',
+                'resume-all',
+                'cancel-all',
+                'remove',
+                'open',
+                'reveal',
+                'torrent-files',
+                'choose-torrent-files',
+                'download-network'
+              ]
+            },
+            { name: 'history', commands: ['history', 'history-clear', 'history-delete'] },
+            {
+              name: 'settings',
+              commands: [
+                'settings',
+                'settings-set',
+                'theme',
+                'slow-mode',
+                'speed-unit',
+                'speed-limit',
+                'slow-mode-speed',
+                'downloads-at-once',
+                'destination'
+              ]
+            },
+            {
+              name: 'network',
+              commands: [
+                'interfaces',
+                'networks',
+                'network-usage',
+                'network-reset',
+                'network-pref',
+                'free-space'
+              ]
+            },
+            { name: 'links-and-window', commands: ['links', 'link-dismiss', 'window', 'clipboard'] }
+          ],
+          aliases: {
+            ping: 'health',
+            commands: 'capabilities',
+            'command-list': 'capabilities',
+            'list-commands': 'capabilities',
+            'app-status': 'status',
+            'recovery-issues': 'recovery',
+            'settings-get': 'settings',
+            config: 'settings',
+            mode: 'theme',
+            'destination-dir': 'destination',
+            list: 'downloads',
+            'download-list': 'downloads',
+            'history-list': 'history',
+            'clear-history': 'history-clear',
+            'history-clear-all': 'history-clear',
+            'delete-history': 'history-delete',
+            download: 'add',
+            'download-add': 'add',
+            probe: 'analyze',
+            'queue-start': 'start',
+            'download-remove': 'remove',
+            'reset-network-usage': 'network-reset',
+            'links-list': 'links'
+          },
+          cliMetaCommands: ['help', '--help', '-h', 'version', '--version', '-v'],
+          safety: {
+            fileDeletion: 'remove keeps files unless --trash-file on is explicitly requested',
+            historyDeletion: 'history-clear and history-delete remove records only',
+            clipboard: 'clipboard returns potentially sensitive text',
+            windowClose: 'window --action close closes the desktop app'
+          }
+        }
       case 'status':
       case 'app-status': {
         const [downloads, history] = await Promise.all([allUpdates(), allHistory()])
@@ -1905,11 +2030,19 @@ export async function registerSonicBridge(): Promise<void> {
         return applySettingByKey('speedUnit', value)
       }
       case 'speed-limit': {
-        if (argValue === undefined)
-          return { slowModeSpeedBytesPerSecond: effectiveSettings().slowModeSpeed }
+        const current = effectiveSettings()
+        if (argValue === undefined || String(argValue).toLowerCase() === 'status')
+          return {
+            enabled: current.slowMode ?? false,
+            speedLimitBytesPerSecond: current.slowMode
+              ? (current.slowModeSpeed ?? DEFAULT_SLOW_MODE_SPEED)
+              : null
+          }
+        if (String(argValue).trim().toLowerCase() === 'off')
+          return updateSettings({ slowMode: false })
         const rate = rateToBytes(argValue, request.unit)
-        if (rate === undefined) throw new Error('Slow-mode speed must be a positive rate.')
-        return updateSettings({ slowModeSpeed: rate })
+        if (rate === undefined) throw new Error('Speed limit must be a positive rate or off.')
+        return updateSettings({ slowMode: true, slowModeSpeed: rate })
       }
       case 'slow-mode-speed': {
         if (argValue === undefined)
@@ -1928,13 +2061,102 @@ export async function registerSonicBridge(): Promise<void> {
         if (!value) return { destinationDir: effectiveSettings().destinationDir }
         return applySettingByKey('destinationDir', value)
       }
+      case 'download-stats': {
+        const [downloads, history] = await Promise.all([allUpdates(), allHistory()])
+        const rows = downloads.map((entry) => summarize(entry.state))
+        const byStatus: Record<string, number> = {}
+        for (const row of rows) {
+          const status = String(row.status ?? 'unknown').toLowerCase()
+          byStatus[status] = (byStatus[status] ?? 0) + 1
+        }
+        const bytes = (rows: Record<string, unknown>[], key: string): number =>
+          rows.reduce(
+            (total, row) => total + (typeof row[key] === 'number' ? (row[key] as number) : 0),
+            0
+          )
+        const finished = history.map((entry) => summarize(entry))
+        return {
+          queue: {
+            total: rows.length,
+            byStatus,
+            downloadedBytes: bytes(rows, 'downloadedBytes'),
+            knownTotalBytes: bytes(rows, 'totalBytes')
+          },
+          history: {
+            total: finished.length,
+            downloadedBytes: bytes(finished, 'downloadedBytes'),
+            knownTotalBytes: bytes(finished, 'totalBytes')
+          }
+        }
+      }
       case 'list':
       case 'downloads':
-      case 'download-list':
-        return (await allUpdates()).map((entry) => summarize(entry.state))
+      case 'download-list': {
+        const rows = (await allUpdates()).map((entry) => summarize(entry.state))
+        const query = (textOf('query', 'search') ?? '').toLowerCase()
+        const status = (textOf('status') ?? '').toLowerCase()
+        const kind = (textOf('kind', 'type') ?? '').toLowerCase()
+        const hasPaging = request.limit !== undefined || request.offset !== undefined
+        const filtered = rows.filter((row) => {
+          if (
+            status &&
+            !String(row.status ?? '')
+              .toLowerCase()
+              .includes(status)
+          )
+            return false
+          if (
+            kind &&
+            !String(row.kind ?? '')
+              .toLowerCase()
+              .includes(kind)
+          )
+            return false
+          if (
+            query &&
+            ![row.id, row.name, row.url, row.destination].some((value) =>
+              String(value ?? '')
+                .toLowerCase()
+                .includes(query)
+            )
+          )
+            return false
+          return true
+        })
+        if (!query && !status && !kind && !hasPaging) return rows
+        const offset = Math.max(0, Math.floor(Number(request.offset) || 0))
+        const limit = Math.min(500, Math.max(1, Math.floor(Number(request.limit) || 100)))
+        return {
+          total: filtered.length,
+          offset,
+          limit,
+          items: filtered.slice(offset, offset + limit)
+        }
+      }
       case 'history':
-      case 'history-list':
-        return (await allHistory()).map((entry) => summarize(entry))
+      case 'history-list': {
+        const rows = (await allHistory()).map((entry) => summarize(entry))
+        const query = (textOf('query', 'search') ?? '').toLowerCase()
+        const hasPaging = request.limit !== undefined || request.offset !== undefined
+        const filtered = rows.filter(
+          (row) =>
+            !query ||
+            [row.id, row.name, row.url, row.destination].some((value) =>
+              String(value ?? '')
+                .toLowerCase()
+                .includes(query)
+            )
+        )
+        if (!query && !hasPaging) return rows
+        const offset = Math.max(0, Math.floor(Number(request.offset) || 0))
+        const limit = Math.min(500, Math.max(1, Math.floor(Number(request.limit) || 100)))
+        return {
+          total: filtered.length,
+          offset,
+          limit,
+          items: filtered.slice(offset, offset + limit)
+        }
+      }
       case 'history-clear':
       case 'clear-history':
       case 'history-clear-all':
@@ -1959,6 +2181,58 @@ export async function registerSonicBridge(): Promise<void> {
         await control({ command: 'remove', id })
         sendHistoryChanged()
         return { deleted: true, id }
+      }
+      case 'add-batch': {
+        let rawItems = request.items ?? request.downloads ?? request.json
+        if (typeof rawItems === 'string') {
+          try {
+            rawItems = JSON.parse(rawItems)
+          } catch {
+            throw new Error('--json/--json-file must contain a JSON array of download objects.')
+          }
+        }
+        if (!Array.isArray(rawItems) || rawItems.length === 0)
+          throw new Error('Provide a non-empty JSON array with --json or --json-file.')
+        if (rawItems.length > 100)
+          throw new Error('A single batch can contain at most 100 downloads.')
+        const originalRequest = request
+        const results: Array<Record<string, unknown>> = []
+        for (const [index, item] of rawItems.entries()) {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            results.push({ index, success: false, error: 'Each batch item must be a JSON object.' })
+            continue
+          }
+          const itemRequest = item as Record<string, unknown>
+          const url =
+            typeof itemRequest.url === 'string'
+              ? itemRequest.url.trim()
+              : typeof itemRequest.link === 'string'
+                ? itemRequest.link.trim()
+                : ''
+          if (!url) {
+            results.push({ index, success: false, error: 'Each item needs a non-empty url field.' })
+            continue
+          }
+          request = { ...originalRequest, ...itemRequest, command: 'add' }
+          try {
+            results.push({ index, success: true, result: await startDownloadFromCli(url) })
+          } catch (error) {
+            results.push({
+              index,
+              success: false,
+              error: error instanceof Error ? error.message : String(error)
+            })
+          } finally {
+            request = originalRequest
+          }
+        }
+        const succeeded = results.filter((item) => item.success).length
+        return {
+          submitted: rawItems.length,
+          succeeded,
+          failed: rawItems.length - succeeded,
+          results
+        }
       }
       case 'add':
       case 'download':
@@ -2096,7 +2370,11 @@ export async function registerSonicBridge(): Promise<void> {
           return { id, success }
         }
         const item = (await externalQueue()).find((entry) => entry.id === id)
-        if (!item || !existsSync(item.destination)) return { id, success: false }
+        if (!item) throw new Error('Download or history item not found: ' + id)
+        if (!existsSync(item.destination))
+          throw new Error(
+            'The download file does not exist at its recorded destination: ' + item.destination
+          )
         if (command === 'open')
           return { id, success: (await shell.openPath(item.destination)) === '' }
         shell.showItemInFolder(item.destination)
@@ -2181,6 +2459,9 @@ export async function registerSonicBridge(): Promise<void> {
       }
       case 'torrent-files': {
         if (!id) throw new Error('Provide --id <download-id>.')
+        const torrent = (await nativeUpdates()).find((entry) => entry.state.id === id)
+        if (!torrent || torrent.state.kind !== 'torrent')
+          throw new Error('Torrent download not found: ' + id)
         return torrentManager.torrentFiles(id)
       }
       case 'choose-torrent-files': {
@@ -2197,24 +2478,10 @@ export async function registerSonicBridge(): Promise<void> {
       case 'link-dismiss': {
         const linkId = textOf('id', 'linkId', 'link-id')
         if (!linkId) throw new Error('Provide --id <link-id>.')
+        if (!pendingLink(linkId))
+          throw new Error('Pending link not found or already expired: ' + linkId)
         releaseLink(linkId)
         return { dismissed: true, id: linkId }
-      }
-      case 'link-resume': {
-        const linkId = textOf('linkId', 'link-id')
-        const downloadId = textOf('downloadId', 'download-id', 'id')
-        if (!linkId || !downloadId)
-          throw new Error('Provide --link-id <link-id> --download-id <download-id>.')
-        const offer = pendingLink(linkId)
-        if (!offer?.probe || offer.probe.kind !== 'http')
-          throw new Error('That pending link is no longer available as a direct web download.')
-        await torrentManager.relink(downloadId, offer.probe.finalUrl, {
-          probe: offer.probe,
-          browser: offer.browser
-        })
-        releaseLink(linkId)
-        void emitSnapshot()
-        return { resumed: true, id: downloadId }
       }
       case 'window': {
         const action = (textOf('action', 'value') ?? '').toLowerCase()
@@ -2241,8 +2508,12 @@ export async function registerSonicBridge(): Promise<void> {
           return { path: resolve(path), freeBytes: null }
         }
       }
-      case 'clipboard':
-        return { text: clipboard.readText() }
+      case 'clipboard': {
+        // Electron's clipboard API returns a string. Normalize defensively so an unexpected
+        // native bridge value cannot serialize as an empty object in CLI JSON.
+        const value: unknown = await clipboard.readText()
+        return { text: typeof value === 'string' ? value : value == null ? '' : String(value) }
+      }
       default:
         throw new Error(
           'Unknown command: ' + command + '. Run SpeedOFreq.Cli.exe --help for supported commands.'

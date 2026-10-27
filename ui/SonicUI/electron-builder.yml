@@ -61,7 +61,8 @@ extraResources:
 asarUnpack:
   - resources/**
 win:
-  forceCodeSigning: true
+  # Unsigned local builds are allowed when no signing certificate is configured.
+  # Release signing can be supplied by the CI certificate environment.
   executableName: Sonic
   target:
     - target: nsis

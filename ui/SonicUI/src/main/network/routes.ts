@@ -44,8 +44,22 @@ export function routesFor(
   iface: NetworkInterfaceInfo,
   remoteAddresses: RemoteAddress[]
 ): NetworkRoute[] {
-  return remoteAddresses.flatMap((remote) =>
-    iface.addresses
+  return remoteAddresses.flatMap((remote) => {
+    // Loopback destinations are local to this machine, not reachable through a physical
+    // adapter's source address. Bind to the matching loopback address so local HTTP fixtures
+    // and services work even when a Wi-Fi/Ethernet interface is selected for downloads.
+    const loopback = remote.address.startsWith('127.') || remote.address === '::1'
+    if (loopback) {
+      return [
+        {
+          device: iface.device,
+          localAddress: remote.family === 6 ? '::1' : '127.0.0.1',
+          remoteAddress: remote.address,
+          family: remote.family
+        }
+      ]
+    }
+    return iface.addresses
       .filter((local) => local.family === remote.family)
       .map((local) => ({
         device: iface.device,
@@ -53,7 +67,7 @@ export function routesFor(
         remoteAddress: remote.address,
         family: remote.family
       }))
-  )
+  })
 }
 
 export function compatibleInterfaces(

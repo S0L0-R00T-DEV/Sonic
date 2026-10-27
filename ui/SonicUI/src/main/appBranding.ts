@@ -1,10 +1,14 @@
 import { app, BrowserWindow, nativeImage, Tray } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import type { ThemeSource } from '../shared/types'
 let activeTray: Tray | null = null
+let activeThemeSource: ThemeSource = 'sonic'
 
-function iconFileName(): string {
-  // Keep Sonic's product identity consistent across themes, taskbar, and tray.
+function iconFileName(themeSource: ThemeSource): string {
+  // Sonic mode uses the blue-and-white brand mark; each explicit appearance has its own icon.
+  if (themeSource === 'light') return 'sonic-icon-red.png'
+  if (themeSource === 'dark') return 'sonic-icon-black.png'
   return 'sonic-icon-blue.png'
 }
 
@@ -18,8 +22,10 @@ function iconCandidates(fileName: string): string[] {
   ]
 }
 
-export function currentBrandIcon(): Electron.NativeImage {
-  const name = iconFileName()
+export function currentBrandIcon(
+  themeSource: ThemeSource = activeThemeSource
+): Electron.NativeImage {
+  const name = iconFileName(themeSource)
   for (const file of iconCandidates(name)) {
     if (!existsSync(file)) continue
     const image = nativeImage.createFromPath(file)
@@ -29,13 +35,14 @@ export function currentBrandIcon(): Electron.NativeImage {
   return nativeImage.createEmpty()
 }
 
-export function registerBrandTray(tray: Tray): void {
+export function registerBrandTray(tray: Tray, themeSource: ThemeSource = activeThemeSource): void {
   activeTray = tray
-  tray.setImage(currentBrandIcon())
+  tray.setImage(currentBrandIcon(themeSource))
 }
 
-export function setBrandTheme(): void {
-  const image = currentBrandIcon()
+export function setBrandTheme(themeSource: ThemeSource = activeThemeSource): void {
+  activeThemeSource = themeSource
+  const image = currentBrandIcon(themeSource)
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.setIcon(image)
   }
