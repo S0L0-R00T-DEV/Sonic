@@ -81,7 +81,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: sonic-windows-installer
-          path: ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe
+          path: |
+            ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe
+            ui/SonicUI/dist-sonic-release/sonic-update-manifest.json
           if-no-files-found: error
       - name: Publish GitHub release
         if: github.event_name == 'push'
