@@ -42,7 +42,7 @@ foreach ($contract in @(
   @{ Name = 'update diagnostics are persisted before download begins'; Pattern = "appendUpdateDiagnostic\('UPDATE REQUEST STARTED" },
   @{ Name = 'download failures are written to update-install.log'; Pattern = "appendUpdateDiagnostic\('UPDATE DOWNLOAD FAILED" },
   @{ Name = 'supervisor handoff failures are written to update-install.log'; Pattern = "appendUpdateDiagnostic\('INSTALL HANDOFF FAILED" },
-  @{ Name = 'diagnostic writer appends timestamped newline-delimited records'; Pattern = '(?s)async function appendUpdateDiagnostic.*?appendFile.*?update-install\.log.*?toISOString\(\).*?message\.replace' },
+  @{ Name = 'diagnostic writer appends timestamped newline-delimited records'; Pattern = '(?s)async function appendUpdateDiagnostic.*?appendFile.*?update-install\.log.*?toISOString\(\).*?message\.replace' }
 )) {
   if ($updaterSource -notmatch $contract.Pattern) { throw "Updater contract failed: $($contract.Name)" }
 }
