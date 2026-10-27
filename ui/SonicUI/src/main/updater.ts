@@ -40,7 +40,10 @@ type GitHubRelease = {
 type VerifiedAsset = { version: string; assetName: string; sha256: string; platform?: string }
 const MAX_MANIFEST_BYTES = 1024 * 1024
 const MAX_UPDATE_BYTES = 1024 * 1024 * 1024
-const pendingVerifiedUpdates = new Map<string, { path: string; sha256: string; fileName: string }>()
+const pendingVerifiedUpdates = new Map<
+  string,
+  { path: string; sha256: string; fileName: string; version: string }
+>()
 
 async function readBoundedBody(
   response: Response,
@@ -259,7 +262,12 @@ export async function downloadVerifiedUpdate(
   const operationId = randomUUID()
   const path = join(directory, `${operationId}-${safeName}`)
   await writeFile(path, bytes, { flag: 'wx', mode: 0o600 })
-  pendingVerifiedUpdates.set(operationId, { path, sha256: actual, fileName: safeName })
+  pendingVerifiedUpdates.set(operationId, {
+    path,
+    sha256: actual,
+    fileName: safeName,
+    version: verified.version
+  })
   onProgress?.({
     bytesDownloaded: bytes.byteLength,
     totalBytes: bytes.byteLength,
@@ -300,9 +308,12 @@ export async function openVerifiedUpdate(
     const psQuote = (value: string): string => `'${value.replace(/'/g, "''")}'`
     const installerPath = psQuote(pending.path)
     const applicationPath = psQuote(app.getPath('exe'))
-    // Keep this supervisor alive after Sonic exits: it waits for NSIS to finish, then starts the
-    // newly installed executable. This is reliable even for a silent installer with no UI.
-    const command = `$ErrorActionPreference = 'Stop'; $installer = ${installerPath}; $application = ${applicationPath}; Start-Process -FilePath $installer -ArgumentList '/S' -Wait; if (Test-Path -LiteralPath $application) { Start-Process -FilePath $application }`
+    const installDirectory = psQuote(join(app.getPath('exe'), '..'))
+    const expectedVersion = psQuote(pending.version)
+    // Keep this supervisor alive after Sonic exits. Explicitly target the current installation and
+    // elevate NSIS: otherwise a per-user installer can create a second copy while the old Program
+    // Files installation remains unchanged. Verify the executable version before relaunching.
+    const command = `$ErrorActionPreference = 'Stop'; $installer = ${installerPath}; $application = ${applicationPath}; $installDirectory = ${installDirectory}; $expectedVersion = ${expectedVersion}; $process = Start-Process -FilePath $installer -ArgumentList @('/S', ('/D=' + $installDirectory)) -Verb RunAs -Wait -PassThru; if ($process.ExitCode -ne 0) { throw "Sonic installer failed with exit code $($process.ExitCode)." }; if (-not (Test-Path -LiteralPath $application)) { throw 'Sonic executable was not found after installation.' }; $deadline = (Get-Date).AddSeconds(30); do { $installedVersion = (Get-Item -LiteralPath $application).VersionInfo.ProductVersion; if ($installedVersion -and ($installedVersion -eq $expectedVersion -or $installedVersion -like ($expectedVersion + '.*'))) { break }; Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $deadline); if (-not $installedVersion -or -not ($installedVersion -eq $expectedVersion -or $installedVersion -like ($expectedVersion + '.*'))) { throw "Sonic update verification failed. Expected $expectedVersion; found $installedVersion." }; Start-Process -FilePath $application`
     const supervisor = spawn(
       'powershell.exe',
       ['-NoProfile', '-NonInteractive', '-Command', command],

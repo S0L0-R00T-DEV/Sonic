@@ -98,7 +98,11 @@ jobs:
         shell: pwsh
         run: |
           $notes = @'
-          ## Sonic 1.1.0
+          ## Sonic 1.1.1
+
+          ### Update reliability
+          - Fixed in-app updates to elevate the installer and target the existing installation directory.
+          - Verify the installed executable version before relaunching Sonic, preventing silent failed updates from appearing successful.
 
           ### What's new
           - Added Microsoft Edge and Vivaldi to the browser-extension support list.

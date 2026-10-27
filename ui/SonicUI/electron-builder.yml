@@ -70,7 +70,7 @@ win:
 nsis:
   artifactName: Sonic-Setup-x64.exe
   oneClick: false
-  perMachine: false
+  perMachine: true
   allowElevation: true
   runAfterFinish: true
   allowToChangeInstallationDirectory: true
