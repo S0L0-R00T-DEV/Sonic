@@ -152,12 +152,30 @@ try {
     '-LogPath', $supervisorLog,
     '-SkipElevation', '-NoDialog'
   )
-  $quotedSupervisorArguments = $supervisorArguments | ForEach-Object { '"' + $_.Replace('"', '\"') + '"' }
   Write-Host "Testing in-app update handoff from $previousVersion to $ExpectedVersion..."
-  $supervisorRun = Start-Process -FilePath 'powershell.exe' -ArgumentList ($quotedSupervisorArguments -join ' ') -Wait -PassThru -WindowStyle Hidden
+  # Use ProcessStartInfo.ArgumentList so Windows receives each argument exactly;
+  # Start-Process -ArgumentList string-joining/quoting caused powershell.exe -File
+  # to receive an invalid script path (exit code -196608) and never run the supervisor.
+  $supervisorStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $supervisorStartInfo.FileName = (Get-Command 'powershell.exe').Source
+  $supervisorStartInfo.UseShellExecute = $false
+  $supervisorStartInfo.CreateNoWindow = $true
+  $supervisorStartInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+  $supervisorStartInfo.RedirectStandardOutput = $true
+  $supervisorStartInfo.RedirectStandardError = $true
+  foreach ($argument in $supervisorArguments) {
+    [void]$supervisorStartInfo.ArgumentList.Add($argument)
+  }
+  $supervisorProcess = [System.Diagnostics.Process]::Start($supervisorStartInfo)
+  $stdoutTask = $supervisorProcess.StandardOutput.ReadToEndAsync()
+  $stderrTask = $supervisorProcess.StandardError.ReadToEndAsync()
+  $supervisorProcess.WaitForExit()
+  $supervisorStdout = $stdoutTask.GetAwaiter().GetResult()
+  $supervisorStderr = $stderrTask.GetAwaiter().GetResult()
+  $supervisorExitCode = $supervisorProcess.ExitCode
   $supervisorOutput = if (Test-Path -LiteralPath $supervisorLog) { Get-Content -LiteralPath $supervisorLog -Raw } else { '' }
-  if ($supervisorRun.ExitCode -ne 0 -or $supervisorOutput -notmatch 'UPDATE SUCCESS: installed version verified and a visible Sonic main window is running') {
-    throw ("In-app upgrade supervisor smoke test failed (exit code $($supervisorRun.ExitCode)). Log: $supervisorLog" + [Environment]::NewLine + $supervisorOutput)
+  if ($supervisorExitCode -ne 0 -or $supervisorOutput -notmatch 'UPDATE SUCCESS: installed version verified and a visible Sonic main window is running') {
+    throw ("In-app upgrade supervisor smoke test failed (exit code $supervisorExitCode)." + [Environment]::NewLine + "Script stdout: $supervisorStdout" + [Environment]::NewLine + "Script stderr: $supervisorStderr" + [Environment]::NewLine + "Log: $supervisorLog" + [Environment]::NewLine + $supervisorOutput)
   }
   $upgradedVersion = (Get-Item -LiteralPath $upgradeExe).VersionInfo.ProductVersion
   if ($upgradedVersion -ne $ExpectedVersion -and $upgradedVersion -notlike "$ExpectedVersion.*") {
