@@ -95,18 +95,24 @@ try {
   if (Test-Path $upgradeDir) { Remove-Item -LiteralPath $upgradeDir -Recurse -Force }
   if (Test-Path $upgradeProfileDir) { Remove-Item -LiteralPath $upgradeProfileDir -Recurse -Force }
 
-  # First prove the clean-install copy includes the exact supervisor script
-  # that will be used to upgrade a separately installed older release.
+  & taskkill.exe /PID $mainProcess.Id /T /F *> $null
+  try { $mainProcess.WaitForExit(10000) } catch {}
+  $mainProcess = $null
+  Start-Sleep -Seconds 1
+
+  # The previous machine-wide installer can remove/replace the clean-install directory
+  # because both releases share the same AppId. Preserve the new supervisor outside either
+  # installation before exercising the upgrade, just as a running supervisor survives app exit.
+  $supervisorTestPath = Join-Path $env:TEMP ("SonicInstallerSmoke-supervisor-" + [guid]::NewGuid().ToString() + '.ps1')
   $sourceSupervisorHash = (Get-FileHash -LiteralPath $supervisorSource -Algorithm SHA256).Hash
   $packagedSupervisorHash = (Get-FileHash -LiteralPath $packagedSupervisor -Algorithm SHA256).Hash
   if ($sourceSupervisorHash -ne $packagedSupervisorHash) {
     throw 'The packaged updater supervisor differs from the source script.'
   }
-
-  & taskkill.exe /PID $mainProcess.Id /T /F *> $null
-  try { $mainProcess.WaitForExit(10000) } catch {}
-  $mainProcess = $null
-  Start-Sleep -Seconds 1
+  Copy-Item -LiteralPath $packagedSupervisor -Destination $supervisorTestPath -Force
+  if ((Get-FileHash -LiteralPath $supervisorTestPath -Algorithm SHA256).Hash -ne $sourceSupervisorHash) {
+    throw 'Could not preserve an exact copy of the packaged update supervisor for the upgrade test.'
+  }
 
   Write-Host "Installing previous Sonic release for an actual upgrade test: $previousInstaller"
   $previousInstall = Start-Process -FilePath $previousInstaller -ArgumentList @('/S', "/D=$upgradeDir") -Wait -PassThru
@@ -141,7 +147,7 @@ try {
   $installerHash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
   $supervisorArguments = @(
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
-    '-File', $packagedSupervisor,
+    '-File', $supervisorTestPath,
     '-InstallerPath', $installer,
     '-ApplicationPath', $upgradeExe,
     '-InstallDirectory', $upgradeDir,
