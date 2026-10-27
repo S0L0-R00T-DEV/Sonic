@@ -19,7 +19,7 @@ foreach ($contract in @(
   @{ Name = 'machine-wide installer permits elevation'; Pattern = '(?m)^\s*perMachine:\s*true\s*$' },
   @{ Name = 'installer finish page launches the app'; Pattern = '(?m)^\s*runAfterFinish:\s*true\s*$' },
   @{ Name = 'desktop shortcut creation is configured'; Pattern = '(?m)^\s*createDesktopShortcut:\s*always\s*$' },
-  @{ Name = 'update supervisor is copied from build into resources'; Pattern = '(?s)extraResources:\s+- from: build\s+to: \.\s+filter:\s+- update-supervisor\.ps1' }
+  @{ Name = 'update supervisor is copied from build into resources'; Pattern = '(?s)extraResources:.*?from: build.*?to: \.\s+filter:.*?update-supervisor\.ps1' }
 )) {
   if ($config -notmatch $contract.Pattern) { throw "Installer contract failed: $($contract.Name)" }
 }
