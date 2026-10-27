@@ -328,7 +328,9 @@ export async function openVerifiedUpdate(
     }
   }
   if (!app.isPackaged) {
-    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: refusing to launch installer from an unpackaged development build')
+    await appendUpdateDiagnostic(
+      'INSTALL HANDOFF FAILED: refusing to launch installer from an unpackaged development build'
+    )
     return {
       opened: false,
       error:
@@ -339,7 +341,10 @@ export async function openVerifiedUpdate(
   try {
     bytes = await readFile(pending.path)
   } catch (error) {
-    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: staged installer could not be read: ' + (error instanceof Error ? error.message : String(error)))
+    await appendUpdateDiagnostic(
+      'INSTALL HANDOFF FAILED: staged installer could not be read: ' +
+        (error instanceof Error ? error.message : String(error))
+    )
     throw error
   }
   if (createHash('sha256').update(bytes).digest('hex') !== pending.sha256) {
