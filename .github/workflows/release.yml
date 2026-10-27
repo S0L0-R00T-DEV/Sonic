@@ -118,20 +118,7 @@ jobs:
           - Build, lint, and .NET CLI Release build passed locally.
           - Some real-peer transfer and destination/file-removal edge cases remain documented in CLI_USAGE.md; this release note does not claim those edge cases were exhaustively certified.
           '@
-          if ($env:TAG -notmatch '^v?[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?
-          $installer = 'ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe'
-          $manifest = 'ui/SonicUI/dist-sonic-release/sonic-update-manifest.json'
-          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
-            gh release view $env:TAG *> $null
-            if ($LASTEXITCODE -eq 0) {
-              gh release upload $env:TAG $installer $manifest --clobber
-            } else {
-              gh release create $env:TAG $installer $manifest --title "Sonic $($env:TAG.TrimStart('v'))" --notes $notes
-            }
-          } else {
-            gh release create $env:TAG $installer $manifest --title "Sonic $($env:TAG.TrimStart('v'))" --notes $notes
-          }
-) { throw "Invalid release tag: $env:TAG" }
+          if ($env:TAG -notmatch '^v?[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$') { throw "Invalid release tag: $env:TAG" }
           $installer = 'ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe'
           $manifest = 'ui/SonicUI/dist-sonic-release/sonic-update-manifest.json'
           if ($env:EVENT_NAME -eq 'workflow_dispatch') {
