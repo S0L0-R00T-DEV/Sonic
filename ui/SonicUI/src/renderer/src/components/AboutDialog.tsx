@@ -206,7 +206,7 @@ export function AboutDialog({
                     )}
                     {result.assetName && result.assetSha256 && !result.verificationError && (
                       <p className="text-xs">
-                        Installer signature and SHA-256 verified for {result.assetName}.
+                        Manifest signature verified; installer hash check follows download.
                       </p>
                     )}
                     {result.assetName && result.assetSha256 && !result.verificationError ? (
@@ -275,7 +275,7 @@ export function AboutDialog({
                         ? `${(updateProgress.bytesDownloaded / 1024 / 1024).toFixed(1)} / ${(updateProgress.totalBytes / 1024 / 1024).toFixed(1)} MB`
                         : 'Receiving installer…'
                       : updateProgress.phase === 'verifying'
-                        ? 'Download complete'
+                        ? 'Checking installer SHA-256...'
                         : '100%'}
                   </span>
                   <span>{updateProgress.percent}%</span>

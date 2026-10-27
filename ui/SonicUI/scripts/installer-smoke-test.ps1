@@ -17,6 +17,8 @@ $extensionDefaults = Get-Content -LiteralPath (Join-Path $root 'extension\src\de
 $extensionBackground = Get-Content -LiteralPath (Join-Path $root 'extension\src\background.ts') -Raw
 $extensionPopup = Get-Content -LiteralPath (Join-Path $root 'extension\src\popup.html') -Raw
 $extensionOptions = Get-Content -LiteralPath (Join-Path $root 'extension\src\options.html') -Raw
+
+$aboutDialogSource = Get-Content -LiteralPath (Join-Path $root 'src\renderer\src\components\AboutDialog.tsx') -Raw
 $rendererNewDownload = Get-Content -LiteralPath (Join-Path $root 'src\renderer\src\components\NewDownloadDialog.tsx') -Raw
 $supervisorTokens = $null
 $supervisorErrors = $null
@@ -49,7 +51,10 @@ foreach ($contract in @(
 if ($updaterSource -match '(?s)supervisor = spawn\(powershellPath, supervisorArguments, \{\s*detached:\s*true') {
   throw 'Updater contract failed: PowerShell supervisor must not use detached=true on Windows.'
 }
+if ($aboutDialogSource -match 'Installer signature and SHA-256 verified') { throw 'Updater UI contract failed: do not claim the installer hash is verified before download.' }
 foreach ($contract in @(
+  @{ Name = 'updater UI explains manifest verification before installer hashing'; Pattern = 'Manifest signature verified; installer hash check follows download.' },
+  @{ Name = 'updater UI reports hashing rather than completion during verification'; Pattern = 'Checking installer SHA-256\.\.\.' },
   @{ Name = 'companion includes all three themes'; Pattern = 'data-theme="dark".*?data-theme="light".*?data-theme="sonic"' },
   @{ Name = 'companion supports live refresh and task filters'; Pattern = '(?s)live-refresh.*?status-filter.*?updateStats' },
   @{ Name = 'automatic browser start is opt-in by default'; Pattern = '(?s)autoStart:\s*false' },

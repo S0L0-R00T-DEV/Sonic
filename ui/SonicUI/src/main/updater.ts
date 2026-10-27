@@ -267,7 +267,7 @@ export async function downloadVerifiedUpdate(
     onProgress?.({
       bytesDownloaded: bytes.byteLength,
       totalBytes: bytes.byteLength,
-      percent: 100,
+      percent: 99,
       phase: 'verifying'
     })
     const actual = createHash('sha256').update(bytes).digest('hex')
