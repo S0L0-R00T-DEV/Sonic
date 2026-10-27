@@ -293,6 +293,8 @@ function SettingsEditor({ onClose }: { onClose: () => void }): React.JSX.Element
               <li>Google Chrome</li>
               <li>UC Browser</li>
               <li>Brave</li>
+              <li>Vivaldi</li>
+              <li>Microsoft Edge</li>
             </ul>
           </details>
           <div className="mt-3 border-t border-border pt-3">
