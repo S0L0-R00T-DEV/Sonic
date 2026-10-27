@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Existing release tag to rebuild and replace its installer and signed manifest (for example v1.1.0)'
+        description: 'Existing release tag to rebuild and replace its installer and signed manifest (for example v1.1.7)'
         required: true
         type: string
 
@@ -108,11 +108,13 @@ jobs:
         shell: pwsh
         run: |
           $notes = @'
-          ## Sonic 1.1.5
+          ## Sonic 1.1.7
 
           ### In-app updater reliability
           - Launch the update supervisor from a separately packaged PowerShell script rather than a long inline command.
           - Keep Sonic open until the supervisor confirms it started; show diagnostic details if handoff fails.
+          - Persist timestamped update diagnostics before download and installer handoff, including early failures that occur before PowerShell starts.
+          - Record download verification, supervisor startup, and handoff failures in update-install.log.
           - Recheck installer SHA-256 immediately before launch, verify the installed version, and verify the relaunch.
           - Add release CI coverage for the supervisor-driven install/update/restart path in an isolated directory.
 
