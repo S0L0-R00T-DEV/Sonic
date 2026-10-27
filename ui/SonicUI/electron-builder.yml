@@ -48,8 +48,13 @@ files:
   - '!node_modules/webrtc-polyfill/**'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 extraResources:
-  - from: build/update-supervisor.ps1
-    to: update-supervisor.ps1
+  # Copy the supervisor from the app project root into resources\update-supervisor.ps1.
+  # Keeping the source directory as "from" avoids electron-builder's single-file mapping
+  # silently omitting this required updater runtime asset in packaged builds.
+  - from: build
+    to: .
+    filter:
+      - update-supervisor.ps1
   - from: ../../artifacts/sonic-backend-current/win-x64
     to: sonic-backend
   - from: extension/dist
