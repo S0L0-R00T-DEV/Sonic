@@ -310,13 +310,13 @@ export async function openVerifiedUpdate(
     const applicationPath = psQuote(app.getPath('exe'))
     const installDirectory = psQuote(join(app.getPath('exe'), '..'))
     const expectedVersion = psQuote(pending.version)
-    // Keep this supervisor alive after Sonic exits. Explicitly target the current installation and
-    // elevate NSIS: otherwise a per-user installer can create a second copy while the old Program
-    // Files installation remains unchanged. Verify the executable version before relaunching.
-    const command = `$ErrorActionPreference = 'Stop'; $installer = ${installerPath}; $application = ${applicationPath}; $installDirectory = ${installDirectory}; $expectedVersion = ${expectedVersion}; $process = Start-Process -FilePath $installer -ArgumentList @('/S', ('/D=' + $installDirectory)) -Verb RunAs -Wait -PassThru; if ($process.ExitCode -ne 0) { throw "Sonic installer failed with exit code $($process.ExitCode)." }; if (-not (Test-Path -LiteralPath $application)) { throw 'Sonic executable was not found after installation.' }; $deadline = (Get-Date).AddSeconds(30); do { $installedVersion = (Get-Item -LiteralPath $application).VersionInfo.ProductVersion; if ($installedVersion -and ($installedVersion -eq $expectedVersion -or $installedVersion -like ($expectedVersion + '.*'))) { break }; Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $deadline); if (-not $installedVersion -or -not ($installedVersion -eq $expectedVersion -or $installedVersion -like ($expectedVersion + '.*'))) { throw "Sonic update verification failed. Expected $expectedVersion; found $installedVersion." }; Start-Process -FilePath $application`
+    // Keep a detached supervisor alive after Sonic exits. Log every installer outcome and
+    // recover by relaunching the existing app if elevation, installation, or version verification fails.
+    const logPath = psQuote(join(app.getPath('userData'), 'update-install.log'))
+    const command = `$ErrorActionPreference = 'Stop'; $log = ${logPath}; $installer = ${installerPath}; $application = ${applicationPath}; $installDirectory = ${installDirectory}; $expectedVersion = ${expectedVersion}; function Write-UpdateLog([string]$message) { Add-Content -LiteralPath $log -Encoding UTF8 -Value ("[" + (Get-Date -Format o) + "] " + $message) }; try { Write-UpdateLog "Starting update to $expectedVersion"; Write-UpdateLog "Installer: $installer"; Write-UpdateLog "Target directory: $installDirectory"; if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Verified installer file is missing.' }; $arguments = '/S /D=' + $installDirectory; Write-UpdateLog "Launching elevated installer with arguments: $arguments"; $process = Start-Process -FilePath $installer -ArgumentList $arguments -Verb RunAs -Wait -PassThru -ErrorAction Stop; Write-UpdateLog "Installer process exited with code $($process.ExitCode)"; if ($process.ExitCode -ne 0) { throw "Sonic installer failed with exit code $($process.ExitCode)." }; if (-not (Test-Path -LiteralPath $application -PathType Leaf)) { throw 'Sonic executable was not found after installation.' }; $deadline = (Get-Date).AddSeconds(60); $installedVersion = ''; do { $installedVersion = (Get-Item -LiteralPath $application).VersionInfo.ProductVersion; if ($installedVersion -and ($installedVersion -eq $expectedVersion -or $installedVersion -like ($expectedVersion + '.*'))) { break }; Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $deadline); if (-not $installedVersion -or -not ($installedVersion -eq $expectedVersion -or $installedVersion -like ($expectedVersion + '.*'))) { throw "Sonic update verification failed. Expected $expectedVersion; found $installedVersion." }; Write-UpdateLog "Verified installed version $installedVersion"; Start-Process -FilePath $application -ErrorAction Stop; Write-UpdateLog 'Updated Sonic launched successfully' } catch { $failure = $_.Exception.Message; try { Write-UpdateLog ("UPDATE FAILED: " + $failure) } catch {}; try { Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show(("Sonic could not finish updating to version $expectedVersion." + [Environment]::NewLine + [Environment]::NewLine + $failure + [Environment]::NewLine + [Environment]::NewLine + "Diagnostic log: " + $log), 'Sonic update failed', 'OK', 'Error') | Out-Null } catch {}; if (Test-Path -LiteralPath $application -PathType Leaf) { try { Start-Process -FilePath $application -ErrorAction Stop; Write-UpdateLog 'Relaunched existing Sonic after update failure' } catch { try { Write-UpdateLog ("Recovery launch failed: " + $_.Exception.Message) } catch {} } } }`
     const supervisor = spawn(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', command],
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
       {
         detached: true,
         stdio: 'ignore',
@@ -326,14 +326,14 @@ export async function openVerifiedUpdate(
     supervisor.once('error', (error) => {
       if (settled) return
       settled = true
-      resolve({ opened: false, error: error.message })
+      resolve({ opened: false, error: `Could not launch update supervisor: ${error.message}` })
     })
     supervisor.once('spawn', () => {
       if (settled) return
       settled = true
       pendingVerifiedUpdates.delete(operationId)
       supervisor.unref()
-      // Let IPC return to the renderer before exiting; the supervisor owns the install/relaunch.
+      // The detached supervisor records the actual installer exit code and reports failures.
       setTimeout(() => app.quit(), 700)
       resolve({ opened: true })
     })

@@ -98,11 +98,12 @@ jobs:
         shell: pwsh
         run: |
           $notes = @'
-          ## Sonic 1.1.1
+          ## Sonic 1.1.2
 
           ### Update reliability
-          - Fixed in-app updates to elevate the installer and target the existing installation directory.
-          - Verify the installed executable version before relaunching Sonic, preventing silent failed updates from appearing successful.
+          - Added persistent update-install.log diagnostics with installer exit codes and version-verification results.
+          - Show a clear Windows error dialog and relaunch the existing Sonic installation if elevation or installation fails.
+          - Verify the installed executable version before relaunching Sonic; wait up to 60 seconds for replacement to complete.
 
           ### What's new
           - Added Microsoft Edge and Vivaldi to the browser-extension support list.
