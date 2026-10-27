@@ -567,6 +567,8 @@ export interface BrowserContext {
 export interface PendingLink {
   id: string
   url: string
+  /** Browser extension opt-in to starting without an extra confirmation click. */
+  autoStart?: boolean
   /** Reused by New download: checking a single-use link again would spend it. */
   probe?: ProbeResult
   from?: string

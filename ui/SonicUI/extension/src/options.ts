@@ -8,6 +8,7 @@ const element = <T extends HTMLElement>(id: string): T => document.getElementByI
 async function render(): Promise<void> {
   const settings = await loadSettings()
   element<HTMLInputElement>('capture').checked = settings.capture
+  element<HTMLInputElement>('auto-start').checked = settings.autoStart
   element<HTMLInputElement>('skip-small').checked = settings.skipSmall
   const minimum = element<HTMLInputElement>('min-mb')
   minimum.value = String(settings.minMegabytes)
@@ -53,6 +54,10 @@ async function renderConnection(): Promise<void> {
 element<HTMLInputElement>('capture').addEventListener('change', (event) => {
   void saveSettings({ capture: (event.target as HTMLInputElement).checked })
 })
+element<HTMLInputElement>('auto-start').addEventListener('change', (event) => {
+  void saveSettings({ autoStart: (event.target as HTMLInputElement).checked })
+})
+
 element<HTMLInputElement>('skip-small').addEventListener('change', (event) => {
   void saveSettings({ skipSmall: (event.target as HTMLInputElement).checked })
 })

@@ -4,6 +4,7 @@ export type FileTypeMode = 'all' | 'allow' | 'deny'
 /** Settings that govern whether a browser may automatically hand downloads to Sonic. */
 export interface Settings {
   capture: boolean
+  autoStart: boolean
   sites: string[]
   skipSmall: boolean
   minMegabytes: number
@@ -14,6 +15,7 @@ export interface Settings {
 /** Capture is enabled after the user explicitly installs the extension; it can be disabled any time. */
 export const DEFAULT_SETTINGS: Settings = {
   capture: true,
+  autoStart: false,
   sites: [],
   skipSmall: false,
   minMegabytes: 1,

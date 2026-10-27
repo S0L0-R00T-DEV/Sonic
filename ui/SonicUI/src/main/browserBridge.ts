@@ -192,10 +192,11 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 
 function addRequestFrom(body: unknown): BridgeAddRequest | null {
   if (typeof body !== 'object' || body === null) return null
-  const { url, browser, pageUrl, minBytes, fileName } = body as Record<string, unknown>
+  const { url, browser, pageUrl, minBytes, fileName, autoStart } = body as Record<string, unknown>
   if (typeof url !== 'string' || url.length > 8192 || !/^(https?:\/\/|magnet:\?)/i.test(url)) {
     return null
   }
+  if (autoStart !== undefined && typeof autoStart !== 'boolean') return null
   const context = browser === undefined ? undefined : browserContextFrom(browser)
   if (context === null) return null
   if (pageUrl !== undefined && !(typeof pageUrl === 'string' && /^https?:\/\//i.test(pageUrl))) {
@@ -211,6 +212,7 @@ function addRequestFrom(body: unknown): BridgeAddRequest | null {
   }
   return {
     url,
+    autoStart: autoStart as boolean | undefined,
     browser: context,
     pageUrl: pageUrl as string | undefined,
     minBytes: minBytes as number | undefined,
@@ -285,6 +287,7 @@ async function add(
     url: request.url,
     probe,
     browser: request.browser,
+    autoStart: request.autoStart === true,
     from: request.browser?.name,
     signedInTo: signedInTo(request, probe),
     resumes: probe.kind === 'http' ? host.manager.failedMatch(probe) : undefined

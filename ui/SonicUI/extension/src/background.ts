@@ -45,6 +45,7 @@ async function capture(item: chrome.downloads.DownloadItem): Promise<boolean> {
 
   const request: BridgeAddRequest = {
     url,
+    autoStart: settings.autoStart,
     browser: await browserContext([item.url, item.finalUrl], storeOf(item), item.referrer),
     pageUrl: item.referrer || undefined,
     minBytes: settings.skipSmall ? settings.minMegabytes * 1024 * 1024 : undefined,
@@ -109,10 +110,12 @@ async function handoffOne(
   tab: chrome.tabs.Tab | undefined,
   pageUrl: string | undefined
 ): Promise<boolean> {
+  const settings = await loadSettings()
   const request: BridgeAddRequest = /^magnet:/i.test(url)
-    ? { url }
+    ? { url, autoStart: settings.autoStart }
     : {
         url,
+        autoStart: settings.autoStart,
         browser: await browserContext([url], tab && storeOf(tab), pageUrl),
         pageUrl
       }

@@ -584,6 +584,19 @@ function NewDownloadForm({ onDone }: { onDone: () => void }): React.JSX.Element 
     }
   }
 
+  // The extension's opt-in auto-start reuses normal validation and current Sonic defaults.
+  // The ref makes it one-shot while probes and download snapshots trigger rerenders.
+  const autoStartedLink = useRef<string | null>(null)
+  const autoStartHandler = useRef<() => void>(() => {})
+  autoStartHandler.current = () => {
+    void handleStart()
+  }
+  useEffect(() => {
+    if (!shownLink?.autoStart || !canStart || starting || autoStartedLink.current === shownLink.id)
+      return
+    autoStartedLink.current = shownLink.id
+    autoStartHandler.current()
+  }, [shownLink?.id, shownLink?.autoStart, canStart, starting, probe.status])
   const fileName = ready ? (fileNameOverride ?? ready.suggestedFileName) : ''
 
   return (

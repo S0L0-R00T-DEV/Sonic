@@ -21,6 +21,8 @@ export interface BridgePing {
  * deadline: Chrome stops an extension's service worker when a fetch takes over 30 s. */
 export interface BridgeAddRequest {
   url: string
+  /** Explicit extension preference to start without an extra confirmation click. */
+  autoStart?: boolean
   browser?: BrowserContext
   pageUrl?: string
   minBytes?: number

@@ -108,13 +108,17 @@ jobs:
         shell: pwsh
         run: |
           $notes = @'
-          ## Sonic 1.1.4
+          ## Sonic 1.1.5
 
           ### In-app updater reliability
           - Launch the update supervisor from a separately packaged PowerShell script rather than a long inline command.
           - Keep Sonic open until the supervisor confirms it started; show diagnostic details if handoff fails.
           - Recheck installer SHA-256 immediately before launch, verify the installed version, and verify the relaunch.
           - Add release CI coverage for the supervisor-driven install/update/restart path in an isolated directory.
+
+          ### Browser and remote-control improvements
+          - Add Dark, Light, and Sonic appearance modes to the local Wi-Fi companion, with live refresh, download search, status filtering, and task counters.
+          - Add an opt-in Chromium extension setting to automatically start handed-off downloads in Sonic using the current validated defaults; it is off by default.
 
           ### Verification
           - Release CI validates the installer, packaged supervisor script, update-integrity checks, installed version, and visible app relaunch.

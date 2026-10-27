@@ -32,6 +32,7 @@ async function render(): Promise<void> {
   element('closed').hidden = reached !== 'closed'
 
   element<HTMLInputElement>('capture').checked = settings.capture
+  element<HTMLInputElement>('auto-start-popup').checked = settings.autoStart
   element('capture-hint').textContent = settings.capture
     ? 'Supported direct downloads go to Sonic; failed handoffs stay in the browser.'
     : 'Downloads stay in the browser.'
@@ -53,6 +54,10 @@ async function render(): Promise<void> {
 
 element<HTMLInputElement>('capture').addEventListener('change', (event) => {
   void saveSettings({ capture: (event.target as HTMLInputElement).checked })
+})
+
+element<HTMLInputElement>('auto-start-popup').addEventListener('change', (event) => {
+  void saveSettings({ autoStart: (event.target as HTMLInputElement).checked })
 })
 
 element<HTMLInputElement>('site').addEventListener('change', async (event) => {

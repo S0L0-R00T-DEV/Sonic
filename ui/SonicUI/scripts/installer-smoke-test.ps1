@@ -11,6 +11,13 @@ $nsis = Get-Content (Join-Path $root 'build\installer.nsh') -Raw
 $supervisorSource = Join-Path $root 'build\update-supervisor.ps1'
 $supervisor = Get-Content -LiteralPath $supervisorSource -Raw
 $updaterSource = Get-Content -LiteralPath (Join-Path $root 'src\main\updater.ts') -Raw
+$remoteSource = Get-Content -LiteralPath (Join-Path $root 'src\main\remoteControlServer.ts') -Raw
+$bridgeSource = Get-Content -LiteralPath (Join-Path $root 'src\main\browserBridge.ts') -Raw
+$extensionDefaults = Get-Content -LiteralPath (Join-Path $root 'extension\src\defaults.ts') -Raw
+$extensionBackground = Get-Content -LiteralPath (Join-Path $root 'extension\src\background.ts') -Raw
+$extensionPopup = Get-Content -LiteralPath (Join-Path $root 'extension\src\popup.html') -Raw
+$extensionOptions = Get-Content -LiteralPath (Join-Path $root 'extension\src\options.html') -Raw
+$rendererNewDownload = Get-Content -LiteralPath (Join-Path $root 'src\renderer\src\components\NewDownloadDialog.tsx') -Raw
 $supervisorTokens = $null
 $supervisorErrors = $null
 [System.Management.Automation.Language.Parser]::ParseFile($supervisorSource, [ref]$supervisorTokens, [ref]$supervisorErrors) | Out-Null
@@ -30,6 +37,20 @@ foreach ($contract in @(
   @{ Name = 'missing supervisor is reported before launch'; Pattern = 'await access\(supervisorPath\)' }
 )) {
   if ($updaterSource -notmatch $contract.Pattern) { throw "Updater contract failed: $($contract.Name)" }
+}
+foreach ($contract in @(
+  @{ Name = 'companion includes all three themes'; Pattern = 'data-theme="dark".*?data-theme="light".*?data-theme="sonic"' },
+  @{ Name = 'companion supports live refresh and task filters'; Pattern = '(?s)live-refresh.*?status-filter.*?updateStats' },
+  @{ Name = 'automatic browser start is opt-in by default'; Pattern = '(?s)autoStart:\s*false' },
+  @{ Name = 'extension exposes automatic start in popup and options'; Pattern = 'auto-start-popup' },
+  @{ Name = 'extension forwards the automatic start preference'; Pattern = 'autoStart:\s*settings\.autoStart' },
+  @{ Name = 'Sonic validates and honors explicit auto-start handoffs'; Pattern = '(?s)autoStart !== undefined.*?typeof autoStart !== ''boolean''.*?autoStart: request\.autoStart === true' },
+  @{ Name = 'renderer auto-start still uses the normal download validation'; Pattern = '(?s)shownLink\?\.autoStart.*?handleStart' }
+)) {
+  $sources = @($remoteSource, $extensionDefaults, $extensionPopup, $extensionOptions, $extensionBackground, $bridgeSource, $rendererNewDownload)
+  $matched = $false
+  foreach ($source in $sources) { if ($source -match $contract.Pattern) { $matched = $true; break } }
+  if (-not $matched) { throw "Feature contract failed: $($contract.Name)" }
 }
 foreach ($contract in @(
   @{ Name = 'Run Sonic targets the executable directly'; Pattern = '\$appExe" "open"' },
