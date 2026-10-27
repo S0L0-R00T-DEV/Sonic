@@ -4,6 +4,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to rebuild and replace its installer and signed manifest (for example v1.1.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -85,11 +90,11 @@ jobs:
             ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe
             ui/SonicUI/dist-sonic-release/sonic-update-manifest.json
           if-no-files-found: error
-      - name: Publish GitHub release
-        if: github.event_name == 'push'
+      - name: Publish or refresh GitHub release assets
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
         shell: pwsh
         run: |
           $notes = @'
@@ -113,4 +118,10 @@ jobs:
           - Build, lint, and .NET CLI Release build passed locally.
           - Some real-peer transfer and destination/file-removal edge cases remain documented in CLI_USAGE.md; this release note does not claim those edge cases were exhaustively certified.
           '@
-          gh release create $env:TAG ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe ui/SonicUI/dist-sonic-release/sonic-update-manifest.json --title "Sonic 1.1.0" --notes $notes
+          if ($env:TAG -notmatch '^v?\d+\.\d+\.\d+(\.\d+)?
+) { throw "Invalid release tag: $env:TAG" }
+          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
+            gh release upload $env:TAG ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe ui/SonicUI/dist-sonic-release/sonic-update-manifest.json --clobber
+          } else {
+            gh release create $env:TAG ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe ui/SonicUI/dist-sonic-release/sonic-update-manifest.json --title "Sonic $($env:TAG.TrimStart('v'))" --notes $notes
+          }
