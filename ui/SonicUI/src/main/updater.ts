@@ -53,7 +53,7 @@ async function appendUpdateDiagnostic(message: string): Promise<void> {
     await mkdir(userDataPath, { recursive: true })
     await appendFile(
       join(userDataPath, 'update-install.log'),
-      '[' + new Date().toISOString() + '] ' + message.replace(/[\\r\\n]+/g, ' ') + '\\n',
+      '[' + new Date().toISOString() + '] ' + message.replace(/[\r\n]+/g, ' ') + '\n',
       'utf8'
     )
   } catch (error) {
