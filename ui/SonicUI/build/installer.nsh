@@ -14,7 +14,7 @@
       ${else}
         StrCpy $1 ""
       ${endif}
-      ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "$1"
+      ${StdUtils.ExecShellAsUser} $0 "$appExe" "open" "$1"
     FunctionEnd
 
     !define MUI_FINISHPAGE_RUN
@@ -33,12 +33,12 @@
 
   # Called by the finish page only when the checkbox is checked.
   Function CreateDesktopShortcut
-    ${ifNot} ${FileExists} "$newDesktopLink"
-      CreateShortCut "$newDesktopLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
-      ClearErrors
-      WinShell::SetLnkAUMI "$newDesktopLink" "${APP_ID}"
-      System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
-    ${endIf}
+    # Rebuild the selected shortcut even when a stale link already exists.
+    Delete "$newDesktopLink"
+    CreateShortCut "$newDesktopLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
+    ClearErrors
+    WinShell::SetLnkAUMI "$newDesktopLink" "${APP_ID}"
+    System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
   FunctionEnd
 
   # Runs when the user clicks Finish, before the checkbox actions above.
