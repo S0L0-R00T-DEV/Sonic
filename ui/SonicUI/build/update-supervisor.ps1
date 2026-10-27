@@ -15,6 +15,18 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $updateFailed = $false
 
+function Get-FileSha256([string]$Path) {
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  $stream = $null
+  try {
+    $stream = [System.IO.File]::OpenRead($Path)
+    return [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+  } finally {
+    if ($stream) { $stream.Dispose() }
+    $sha256.Dispose()
+  }
+}
+
 function Write-UpdateLog([string]$Message) {
   $line = '[' + (Get-Date -Format o) + '] ' + $Message
   Add-Content -LiteralPath $LogPath -Encoding UTF8 -Value $line
@@ -55,7 +67,7 @@ try {
   if (-not (Test-Path -LiteralPath $InstallerPath -PathType Leaf)) {
     throw "Verified installer is missing: $InstallerPath"
   }
-  $installerHash = (Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $installerHash = Get-FileSha256 -Path $InstallerPath
   if ($installerHash -ne $ExpectedSha256.ToLowerInvariant()) {
     throw "Installer SHA-256 changed before launch. Expected $ExpectedSha256; found $installerHash."
   }
