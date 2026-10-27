@@ -66,12 +66,18 @@ jobs:
           }
           $version = node -p "require('./ui/SonicUI/package.json').version"
           node ./ui/SonicUI/scripts/create-signed-update-manifest.mjs $version ./ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe win32 ./ui/SonicUI/dist-sonic-release/sonic-update-manifest.json
-      - name: Verify only the installer is published
+      - name: Verify the two permitted release assets
         shell: pwsh
         run: |
-          $installer = Resolve-Path './ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe' -ErrorAction Stop
-          if ([IO.Path]::GetExtension($installer.Path) -ne '.exe') { throw 'Expected a Windows .exe installer.' }
-          Write-Host "Verified release installer: $installer"
+          $output = './ui/SonicUI/dist-sonic-release'
+          $installer = Join-Path $output 'Sonic-Setup-x64.exe'
+          $manifest = Join-Path $output 'sonic-update-manifest.json'
+          foreach ($path in @($installer, $manifest)) { if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required release asset is missing: $path" } }
+          $manifestData = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+          if (-not $manifestData.payload -or -not $manifestData.signature) { throw 'Update manifest must contain signed payload and signature.' }
+          $payload = $manifestData.payload | ConvertFrom-Json
+          if ($payload.assetName -ne 'Sonic-Setup-x64.exe' -or $payload.platform -ne 'win32') { throw 'Update manifest does not describe the Windows Sonic installer.' }
+          Write-Host 'Verified permitted release assets: Sonic-Setup-x64.exe and sonic-update-manifest.json'
       - uses: actions/upload-artifact@v4
         with:
           name: sonic-windows-installer
@@ -105,4 +111,4 @@ jobs:
           - Build, lint, and .NET CLI Release build passed locally.
           - Some real-peer transfer and destination/file-removal edge cases remain documented in CLI_USAGE.md; this release note does not claim those edge cases were exhaustively certified.
           '@
-          gh release create $env:TAG ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe --title "Sonic 1.1.0" --notes $notes
+          gh release create $env:TAG ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe ui/SonicUI/dist-sonic-release/sonic-update-manifest.json --title "Sonic 1.1.0" --notes $notes
