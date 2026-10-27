@@ -141,8 +141,8 @@ try {
   $upgradeExe = Join-Path $upgradeDir 'Sonic.exe'
   if (-not (Test-Path -LiteralPath $upgradeExe -PathType Leaf)) { throw 'Previous release installer did not create Sonic.exe.' }
   $previousVersion = (Get-Item -LiteralPath $upgradeExe).VersionInfo.ProductVersion
-  if ($previousVersion -notmatch '^1\.1\.1(\.|$)') {
-    throw "Upgrade test did not start from an older version: $previousVersion"
+  if ([version]$previousVersion -ge [version]$ExpectedVersion) {
+    throw "Upgrade test requires an older installed version than $ExpectedVersion; found $previousVersion."
   }
 
   $env:SONIC_ISOLATED_USER_DATA_DIR = $upgradeProfileDir
