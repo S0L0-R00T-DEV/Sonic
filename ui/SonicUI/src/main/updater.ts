@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { closeSync, openSync } from 'node:fs'
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { app } from 'electron'
@@ -312,32 +313,52 @@ export async function openVerifiedUpdate(
 
   const applicationPath = app.getPath('exe')
   const installDirectory = dirname(applicationPath)
-  const logPath = join(app.getPath('userData'), 'update-install.log')
+  const userDataPath = app.getPath('userData')
+  const logPath = join(userDataPath, 'update-install.log')
+  const stdoutPath = join(userDataPath, `update-supervisor-${operationId}.stdout.log`)
+  const stderrPath = join(userDataPath, `update-supervisor-${operationId}.stderr.log`)
+  const powershellPath = join(
+    process.env['SystemRoot'] || 'C:\\Windows',
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe'
+  )
   const startupMarker = 'SUPERVISOR STARTED operation=' + operationId
+  const quotePowerShell = (value: string): string => "'" + value.replace(/'/g, "''") + "'"
+  // PowerShell's -File argument parsing can silently fail for script paths with spaces
+  // when launched from a packaged Electron process on Windows. Use -Command with
+  // explicitly single-quoted, escaped values so the supervisor actually executes.
+  const supervisorCommand = [
+    '&',
+    quotePowerShell(supervisorPath),
+    '-InstallerPath',
+    quotePowerShell(pending.path),
+    '-ApplicationPath',
+    quotePowerShell(applicationPath),
+    '-InstallDirectory',
+    quotePowerShell(installDirectory),
+    '-ExpectedVersion',
+    quotePowerShell(pending.version),
+    '-ExpectedSha256',
+    quotePowerShell(pending.sha256),
+    '-OldProcessId',
+    String(process.pid),
+    '-OperationId',
+    quotePowerShell(operationId),
+    '-LogPath',
+    quotePowerShell(logPath)
+  ].join(' ')
   const supervisorArguments = [
+    '-NoLogo',
     '-NoProfile',
+    '-NonInteractive',
     '-ExecutionPolicy',
     'Bypass',
     '-WindowStyle',
     'Hidden',
-    '-File',
-    supervisorPath,
-    '-InstallerPath',
-    pending.path,
-    '-ApplicationPath',
-    applicationPath,
-    '-InstallDirectory',
-    installDirectory,
-    '-ExpectedVersion',
-    pending.version,
-    '-ExpectedSha256',
-    pending.sha256,
-    '-OldProcessId',
-    String(process.pid),
-    '-OperationId',
-    operationId,
-    '-LogPath',
-    logPath
+    '-Command',
+    supervisorCommand
   ]
 
   // Do not quit Sonic just because PowerShell was spawned. The supervisor must
@@ -350,11 +371,49 @@ export async function openVerifiedUpdate(
       resolve(result)
     }
 
-    const supervisor = spawn('powershell.exe', supervisorArguments, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true
-    })
+    let supervisor: ReturnType<typeof spawn>
+    let stdoutFd: number | undefined
+    let stderrFd: number | undefined
+    try {
+      // Use the Windows PowerShell host by absolute path, and preserve its output.
+      // This makes failures before the supervisor can create update-install.log diagnosable.
+      stdoutFd = openSync(stdoutPath, 'a')
+      stderrFd = openSync(stderrPath, 'a')
+      // Do not set detached=true here: on Windows it can make PowerShell exit
+      // successfully before evaluating -Command. Windows child processes already
+      // outlive the parent, and unref() below lets Sonic quit after the handshake.
+      supervisor = spawn(powershellPath, supervisorArguments, {
+        stdio: ['ignore', stdoutFd, stderrFd],
+        windowsHide: true
+      })
+    } catch (error) {
+      if (stdoutFd !== undefined) closeSync(stdoutFd)
+      if (stderrFd !== undefined) closeSync(stderrFd)
+      finish({
+        opened: false,
+        error: 'Could not start update supervisor using ' + powershellPath + ': ' + String(error)
+      })
+      return
+    }
+    if (stdoutFd !== undefined) closeSync(stdoutFd)
+    if (stderrFd !== undefined) closeSync(stderrFd)
+
+    const readDiagnostics = async (): Promise<string> => {
+      const sections: string[] = []
+      for (const [label, path] of [
+        ['supervisor log', logPath],
+        ['PowerShell stdout', stdoutPath],
+        ['PowerShell stderr', stderrPath]
+      ] as const) {
+        try {
+          const contents = (await readFile(path, 'utf8')).slice(-1800).trim()
+          if (contents) sections.push(label + ' (' + path + '):\n' + contents)
+        } catch {
+          // Include whichever diagnostics were successfully created.
+        }
+      }
+      return sections.join('\n\n')
+    }
 
     supervisor.once('error', (error) => {
       finish({ opened: false, error: 'Could not launch update supervisor: ' + error.message })
@@ -382,12 +441,7 @@ export async function openVerifiedUpdate(
               supervisor.exitCode !== null
                 ? String(supervisor.exitCode)
                 : 'signal ' + supervisor.signalCode
-            let detail = ''
-            try {
-              detail = (await readFile(logPath, 'utf8')).slice(-2000).trim()
-            } catch {
-              // Keep the process exit details even if no log was created.
-            }
+            const detail = await readDiagnostics()
             finish({
               opened: false,
               error:
@@ -403,12 +457,7 @@ export async function openVerifiedUpdate(
 
         if (!settled) {
           supervisor.kill()
-          let detail = ''
-          try {
-            detail = (await readFile(logPath, 'utf8')).slice(-2000).trim()
-          } catch {
-            // Report the missing startup signal even if no log was produced.
-          }
+          const detail = await readDiagnostics()
           finish({
             opened: false,
             error:

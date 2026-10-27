@@ -31,12 +31,19 @@ foreach ($contract in @(
   if ($config -notmatch $contract.Pattern) { throw "Installer contract failed: $($contract.Name)" }
 }
 foreach ($contract in @(
-  @{ Name = 'updater launches the packaged script using -File'; Pattern = "'-File',\s*supervisorPath" },
+  @{ Name = 'updater invokes the supervisor through a quoted PowerShell command'; Pattern = "'-Command',\s*supervisorCommand" },
+  @{ Name = 'updater quotes supervisor script and installer paths'; Pattern = '(?s)quotePowerShell\(supervisorPath\).*?quotePowerShell\(pending\.path\)' },
+  @{ Name = 'updater uses the absolute Windows PowerShell host'; Pattern = 'const powershellPath = join\(' },
+  @{ Name = 'updater captures PowerShell launch diagnostics'; Pattern = '(?s)update-supervisor-\$\{operationId\}\.stderr\.log.*?PowerShell stderr' },
+  @{ Name = 'updater spawns PowerShell using the explicit command'; Pattern = 'supervisor = spawn\(powershellPath, supervisorArguments, \{' },
   @{ Name = 'updater waits for its unique startup marker'; Pattern = 'log\.includes\(startupMarker\)' },
   @{ Name = 'updater quits only after startup acknowledgement'; Pattern = '(?s)log\.includes\(startupMarker\)[\s\S]*?setTimeout\(\(\) => app\.quit\(\), 700\)' },
   @{ Name = 'missing supervisor is reported before launch'; Pattern = 'await access\(supervisorPath\)' }
 )) {
   if ($updaterSource -notmatch $contract.Pattern) { throw "Updater contract failed: $($contract.Name)" }
+}
+if ($updaterSource -match '(?s)supervisor = spawn\(powershellPath, supervisorArguments, \{\s*detached:\s*true') {
+  throw 'Updater contract failed: PowerShell supervisor must not use detached=true on Windows.'
 }
 foreach ($contract in @(
   @{ Name = 'companion includes all three themes'; Pattern = 'data-theme="dark".*?data-theme="light".*?data-theme="sonic"' },
