@@ -293,9 +293,8 @@ export async function downloadVerifiedUpdate(
       percent: 100,
       phase: 'starting-installer'
     })
-    return { operationId, fileName: safeName, sha256: actual }
-  
     await appendUpdateDiagnostic('DOWNLOAD VERIFIED AND STAGED; version=' + verified.version + '; operation=' + operationId)
+    return { operationId, fileName: safeName, sha256: actual }
   } catch (error) {
     await appendUpdateDiagnostic('UPDATE DOWNLOAD FAILED: ' + (error instanceof Error ? error.stack ?? error.message : String(error)))
     throw error
