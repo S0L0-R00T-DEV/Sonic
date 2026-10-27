@@ -1,4 +1,4 @@
-﻿name: Windows Release
+name: Windows Release
 
 on:
   push:
@@ -38,8 +38,6 @@ jobs:
           }
           $certPath = Join-Path $env:RUNNER_TEMP 'sonic-signing.pfx'
           [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
-          # Trust the exact configured release signer in this ephemeral runner so the
-          # post-build Authenticode check validates the signature created by this workflow.
           $signingCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certPath, $env:WINDOWS_CERTIFICATE_PASSWORD)
           "SONIC_SIGNING_CERT_THUMBPRINT=$($signingCertificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "Configured expected release signer thumbprint $($signingCertificate.Thumbprint)"
@@ -68,15 +66,16 @@ jobs:
           }
           $version = node -p "require('./ui/SonicUI/package.json').version"
           node ./ui/SonicUI/scripts/create-signed-update-manifest.mjs $version ./ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe win32 ./ui/SonicUI/dist-sonic-release/sonic-update-manifest.json
+      - name: Verify only the installer is published
+        shell: pwsh
+        run: |
+          $installer = Resolve-Path './ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe' -ErrorAction Stop
+          if ([IO.Path]::GetExtension($installer.Path) -ne '.exe') { throw 'Expected a Windows .exe installer.' }
+          Write-Host "Verified release installer: $installer"
       - uses: actions/upload-artifact@v4
         with:
-          name: sonic-windows-release
-          path: |
-            ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe
-            ui/SonicUI/dist-sonic-release/Sonic-CLI-win-x64.zip
-            ui/SonicUI/dist-sonic-release/Sonic-Extension-Chrome.zip
-            ui/SonicUI/dist-sonic-release/Sonic-Extension-Firefox.zip
-            ui/SonicUI/dist-sonic-release/sonic-update-manifest.json
+          name: sonic-windows-installer
+          path: ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe
           if-no-files-found: error
       - name: Publish GitHub release
         if: github.event_name == 'push'
@@ -85,10 +84,25 @@ jobs:
           TAG: ${{ github.ref_name }}
         shell: pwsh
         run: |
-          gh release create $env:TAG `
-            ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe `
-            ui/SonicUI/dist-sonic-release/Sonic-CLI-win-x64.zip `
-            ui/SonicUI/dist-sonic-release/Sonic-Extension-Chrome.zip `
-            ui/SonicUI/dist-sonic-release/Sonic-Extension-Firefox.zip `
-            ui/SonicUI/dist-sonic-release/sonic-update-manifest.json `
-            --title $env:TAG --generate-notes
+          $notes = @'
+          ## Sonic 1.1.0
+
+          ### What's new
+          - Added Microsoft Edge and Vivaldi to the browser-extension support list.
+          - Added a Terms of Service dialog.
+          - Added distinct icons for different application modes.
+          - Expanded CLI automation with machine-readable command discovery, health checks, download statistics, and batch download submission.
+          - Added download and history filtering and pagination, plus compact JSON output for scripts and AI clients.
+          - Added automatic Sonic launch for CLI commands when the app is closed and its executable can be located; use --no-launch to disable it.
+
+          ### CLI and reliability
+          - Standardized and documented the supported command catalog and aliases.
+          - Improved CLI JSON-file handling for batch downloads and settings updates.
+          - Updated CLI usage documentation with the current command inventory and verification status.
+
+          ### Verification notes
+          - The recorded manual acceptance checklist has 77/77 rows marked PASS.
+          - Build, lint, and .NET CLI Release build passed locally.
+          - Some real-peer transfer and destination/file-removal edge cases remain documented in CLI_USAGE.md; this release note does not claim those edge cases were exhaustively certified.
+          '@
+          gh release create $env:TAG ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe --title "Sonic 1.1.0" --notes $notes
