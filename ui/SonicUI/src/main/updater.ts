@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
 import { fingerprintEd25519PublicKey, verifySignedManifest } from './download/integrityVerification'
@@ -303,40 +303,120 @@ export async function openVerifiedUpdate(
     pendingVerifiedUpdates.delete(operationId)
     throw new Error('Staged installer changed after verification. It will not be opened.')
   }
+  const supervisorPath = join(process.resourcesPath, 'update-supervisor.ps1')
+  try {
+    await access(supervisorPath)
+  } catch {
+    throw new Error('Update supervisor is missing from this installation: ' + supervisorPath)
+  }
+
+  const applicationPath = app.getPath('exe')
+  const installDirectory = dirname(applicationPath)
+  const logPath = join(app.getPath('userData'), 'update-install.log')
+  const startupMarker = 'SUPERVISOR STARTED operation=' + operationId
+  const supervisorArguments = [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-WindowStyle',
+    'Hidden',
+    '-File',
+    supervisorPath,
+    '-InstallerPath',
+    pending.path,
+    '-ApplicationPath',
+    applicationPath,
+    '-InstallDirectory',
+    installDirectory,
+    '-ExpectedVersion',
+    pending.version,
+    '-ExpectedSha256',
+    pending.sha256,
+    '-OldProcessId',
+    String(process.pid),
+    '-OperationId',
+    operationId,
+    '-LogPath',
+    logPath
+  ]
+
+  // Do not quit Sonic just because PowerShell was spawned. The supervisor must
+  // execute the script and write its unique startup marker first.
   return await new Promise((resolve) => {
     let settled = false
-    const psQuote = (value: string): string => `'${value.replace(/'/g, "''")}'`
-    const installerPath = psQuote(pending.path)
-    const applicationPath = psQuote(app.getPath('exe'))
-    const installDirectory = psQuote(join(app.getPath('exe'), '..'))
-    const expectedVersion = psQuote(pending.version)
-    // Keep a detached supervisor alive after Sonic exits. Log every installer outcome and
-    // recover by relaunching the existing app if elevation, installation, or version verification fails.
-    const logPath = psQuote(join(app.getPath('userData'), 'update-install.log'))
-    const oldProcessId = process.pid
-    const command = `$ErrorActionPreference = 'Stop'; $log = ${logPath}; $installer = ${installerPath}; $application = ${applicationPath}; $installDirectory = ${installDirectory}; $expectedVersion = ${expectedVersion}; $oldProcessId = ${oldProcessId}; function Write-UpdateLog([string]$message) { Add-Content -LiteralPath $log -Encoding UTF8 -Value ("[" + (Get-Date -Format o) + "] " + $message) }; try { Write-UpdateLog "Starting update to $expectedVersion"; Write-UpdateLog "Installer: $installer"; Write-UpdateLog "Target directory: $installDirectory"; Write-UpdateLog "Waiting for original Sonic process $oldProcessId to exit"; $exitDeadline = (Get-Date).AddSeconds(20); while ((Get-Process -Id $oldProcessId -ErrorAction SilentlyContinue) -and (Get-Date) -lt $exitDeadline) { Start-Sleep -Milliseconds 250 }; if (Get-Process -Id $oldProcessId -ErrorAction SilentlyContinue) { throw 'Sonic did not exit before the update installer started.' }; if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Verified installer file is missing.' }; $arguments = '/S /D=' + $installDirectory; Write-UpdateLog "Launching elevated installer with arguments: $arguments"; $process = Start-Process -FilePath $installer -ArgumentList $arguments -Verb RunAs -Wait -PassThru -ErrorAction Stop; Write-UpdateLog "Installer process exited with code $($process.ExitCode)"; if ($process.ExitCode -ne 0) { throw "Sonic installer failed with exit code $($process.ExitCode)." }; if (-not (Test-Path -LiteralPath $application -PathType Leaf)) { throw 'Sonic executable was not found after installation.' }; $deadline = (Get-Date).AddSeconds(60); $installedVersion = ''; do { $installedVersion = (Get-Item -LiteralPath $application).VersionInfo.ProductVersion; if ($installedVersion -and ($installedVersion -eq $expectedVersion -or $installedVersion -like ($expectedVersion + '.*'))) { break }; Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $deadline); if (-not $installedVersion -or -not ($installedVersion -eq $expectedVersion -or $installedVersion -like ($expectedVersion + '.*'))) { throw "Sonic update verification failed. Expected $expectedVersion; found $installedVersion." }; Write-UpdateLog "Verified installed version $installedVersion"; $launch = Start-Process -FilePath $application -WorkingDirectory $installDirectory -PassThru -ErrorAction Stop; Write-UpdateLog "Started updated Sonic process $($launch.Id); checking that it remains running"; Start-Sleep -Seconds 5; if (-not (Get-Process -Id $launch.Id -ErrorAction SilentlyContinue)) { throw 'Sonic exited immediately after the update relaunch. Check for an existing instance or startup failure.' }; Write-UpdateLog 'Verified updated Sonic process remained running after launch' } catch { $failure = $_.Exception.Message; try { Write-UpdateLog ("UPDATE FAILED: " + $failure) } catch {}; try { Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show(("Sonic could not finish updating to version $expectedVersion." + [Environment]::NewLine + [Environment]::NewLine + $failure + [Environment]::NewLine + [Environment]::NewLine + "Diagnostic log: " + $log), 'Sonic update failed', 'OK', 'Error') | Out-Null } catch {}; if (Test-Path -LiteralPath $application -PathType Leaf) { try { $recovery = Start-Process -FilePath $application -WorkingDirectory $installDirectory -PassThru -ErrorAction Stop; Write-UpdateLog "Recovery launch requested for Sonic process $($recovery.Id) after update failure" } catch { try { Write-UpdateLog ("Recovery launch failed: " + $_.Exception.Message) } catch {} } } }`
-    const supervisor = spawn(
-      'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
-      {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      }
-    )
-    supervisor.once('error', (error) => {
+    const finish = (result: { opened: boolean; error?: string }): void => {
       if (settled) return
       settled = true
-      resolve({ opened: false, error: `Could not launch update supervisor: ${error.message}` })
+      resolve(result)
+    }
+
+    const supervisor = spawn('powershell.exe', supervisorArguments, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
     })
+
+    supervisor.once('error', (error) => {
+      finish({ opened: false, error: 'Could not launch update supervisor: ' + error.message })
+    })
+
     supervisor.once('spawn', () => {
-      if (settled) return
-      settled = true
-      pendingVerifiedUpdates.delete(operationId)
       supervisor.unref()
-      // The detached supervisor records the actual installer exit code and reports failures.
-      setTimeout(() => app.quit(), 700)
-      resolve({ opened: true })
+      void (async () => {
+        const deadline = Date.now() + 10000
+        while (!settled && Date.now() < deadline) {
+          try {
+            const log = await readFile(logPath, 'utf8')
+            if (log.includes(startupMarker)) {
+              pendingVerifiedUpdates.delete(operationId)
+              finish({ opened: true })
+              setTimeout(() => app.quit(), 700)
+              return
+            }
+          } catch {
+            // The supervisor may need a moment to create its log file.
+          }
+
+          if (supervisor.exitCode !== null || supervisor.signalCode !== null) {
+            const exitStatus =
+              supervisor.exitCode !== null
+                ? String(supervisor.exitCode)
+                : 'signal ' + supervisor.signalCode
+            let detail = ''
+            try {
+              detail = (await readFile(logPath, 'utf8')).slice(-2000).trim()
+            } catch {
+              // Keep the process exit details even if no log was created.
+            }
+            finish({
+              opened: false,
+              error:
+                'Update supervisor exited before confirming startup (' +
+                exitStatus +
+                ').' +
+                (detail ? ' Log: ' + detail : ' Check diagnostic log: ' + logPath)
+            })
+            return
+          }
+          await new Promise((delay) => setTimeout(delay, 100))
+        }
+
+        if (!settled) {
+          supervisor.kill()
+          let detail = ''
+          try {
+            detail = (await readFile(logPath, 'utf8')).slice(-2000).trim()
+          } catch {
+            // Report the missing startup signal even if no log was produced.
+          }
+          finish({
+            opened: false,
+            error:
+              'Update supervisor did not confirm startup within 10 seconds.' +
+              (detail ? ' Log: ' + detail : ' Diagnostic log: ' + logPath)
+          })
+        }
+      })()
     })
   })
 }

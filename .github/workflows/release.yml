@@ -60,9 +60,16 @@ jobs:
       - name: Build signed application, CLI, and browser extension
         shell: pwsh
         run: .\build.ps1 -Release
-      - name: Smoke-test installed release and startup
+      - name: Download v1.1.1 baseline for updater regression
         shell: pwsh
-        run: .\ui\SonicUI\scripts\installer-smoke-test.ps1 -InstallerPath .\ui\SonicUI\dist-sonic-release\Sonic-Setup-x64.exe -ExpectedVersion (node -p "require('./ui/SonicUI/package.json').version")
+        run: |
+          $previousInstaller = Join-Path $env:RUNNER_TEMP 'Sonic-Setup-v1.1.1-x64.exe'
+          Invoke-WebRequest -Uri 'https://github.com/S0L0-R00T-DEV/Sonic/releases/download/v1.1.1/Sonic-Setup-x64.exe' -OutFile $previousInstaller
+          if (-not (Test-Path -LiteralPath $previousInstaller -PathType Leaf) -or (Get-Item $previousInstaller).Length -lt 100000000) { throw 'Could not download the v1.1.1 baseline installer.' }
+          "SONIC_PREVIOUS_INSTALLER=$previousInstaller" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Smoke-test installed release and updater regression
+        shell: pwsh
+        run: .\ui\SonicUI\scripts\installer-smoke-test.ps1 -InstallerPath .\ui\SonicUI\dist-sonic-release\Sonic-Setup-x64.exe -ExpectedVersion (node -p "require('./ui/SonicUI/package.json').version") -PreviousInstallerPath $env:SONIC_PREVIOUS_INSTALLER
       - name: Create signed update manifest
         shell: pwsh
         env:
@@ -101,31 +108,16 @@ jobs:
         shell: pwsh
         run: |
           $notes = @'
-          ## Sonic 1.1.3
+          ## Sonic 1.1.4
 
-          ### Installer and update reliability
-          - Recreate the desktop shortcut when selected so stale shortcut targets are repaired.
-          - Launch Sonic directly from the installer finish page when Run Sonic is selected.
-          - Wait for the previous app process to exit before replacing files, then verify the installed version and confirm the relaunched process remains running.
-          - Record update-install.log diagnostics, show an error dialog on failure, and attempt recovery launch.
+          ### In-app updater reliability
+          - Launch the update supervisor from a separately packaged PowerShell script rather than a long inline command.
+          - Keep Sonic open until the supervisor confirms it started; show diagnostic details if handoff fails.
+          - Recheck installer SHA-256 immediately before launch, verify the installed version, and verify the relaunch.
+          - Add release CI coverage for the supervisor-driven install/update/restart path in an isolated directory.
 
-          ### What's new
-          - Added Microsoft Edge and Vivaldi to the browser-extension support list.
-          - Added a Terms of Service dialog.
-          - Added distinct icons for different application modes.
-          - Expanded CLI automation with machine-readable command discovery, health checks, download statistics, and batch download submission.
-          - Added download and history filtering and pagination, plus compact JSON output for scripts and AI clients.
-          - Added automatic Sonic launch for CLI commands when the app is closed and its executable can be located; use --no-launch to disable it.
-
-          ### CLI and reliability
-          - Standardized and documented the supported command catalog and aliases.
-          - Improved CLI JSON-file handling for batch downloads and settings updates.
-          - Updated CLI usage documentation with the current command inventory and verification status.
-
-          ### Verification notes
-          - The recorded manual acceptance checklist has 77/77 rows marked PASS.
-          - Build, lint, and .NET CLI Release build passed locally.
-          - Some real-peer transfer and destination/file-removal edge cases remain documented in CLI_USAGE.md; this release note does not claim those edge cases were exhaustively certified.
+          ### Verification
+          - Release CI validates the installer, packaged supervisor script, update-integrity checks, installed version, and visible app relaunch.
           '@
           if ($env:TAG -notmatch '^v?[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$') { throw "Invalid release tag: $env:TAG" }
           $installer = 'ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe'
