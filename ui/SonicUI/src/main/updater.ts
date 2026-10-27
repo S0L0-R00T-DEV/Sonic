@@ -293,10 +293,15 @@ export async function downloadVerifiedUpdate(
       percent: 100,
       phase: 'starting-installer'
     })
-    await appendUpdateDiagnostic('DOWNLOAD VERIFIED AND STAGED; version=' + verified.version + '; operation=' + operationId)
+    await appendUpdateDiagnostic(
+      'DOWNLOAD VERIFIED AND STAGED; version=' + verified.version + '; operation=' + operationId
+    )
     return { operationId, fileName: safeName, sha256: actual }
   } catch (error) {
-    await appendUpdateDiagnostic('UPDATE DOWNLOAD FAILED: ' + (error instanceof Error ? error.stack ?? error.message : String(error)))
+    await appendUpdateDiagnostic(
+      'UPDATE DOWNLOAD FAILED: ' +
+        (error instanceof Error ? (error.stack ?? error.message) : String(error))
+    )
     throw error
   }
 }
@@ -308,8 +313,12 @@ export async function openVerifiedUpdate(
   await appendUpdateDiagnostic('INSTALL HANDOFF REQUESTED; operation=' + operationId)
   const pending = pendingVerifiedUpdates.get(operationId)
   if (!pending) {
-    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: verified installer session missing; operation=' + operationId)
-    throw new Error('Verified installer session was not found. Download and verify the update again.')
+    await appendUpdateDiagnostic(
+      'INSTALL HANDOFF FAILED: verified installer session missing; operation=' + operationId
+    )
+    throw new Error(
+      'Verified installer session was not found. Download and verify the update again.'
+    )
   }
   if (process.platform !== 'win32')
     return {
@@ -325,14 +334,18 @@ export async function openVerifiedUpdate(
   const bytes = await readFile(pending.path)
   if (createHash('sha256').update(bytes).digest('hex') !== pending.sha256) {
     pendingVerifiedUpdates.delete(operationId)
-    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: staged installer SHA-256 mismatch; operation=' + operationId)
+    await appendUpdateDiagnostic(
+      'INSTALL HANDOFF FAILED: staged installer SHA-256 mismatch; operation=' + operationId
+    )
     throw new Error('Staged installer changed after verification. It will not be opened.')
   }
   const supervisorPath = join(process.resourcesPath, 'update-supervisor.ps1')
   try {
     await access(supervisorPath)
   } catch {
-    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: update supervisor missing at ' + supervisorPath)
+    await appendUpdateDiagnostic(
+      'INSTALL HANDOFF FAILED: update supervisor missing at ' + supervisorPath
+    )
     throw new Error('Update supervisor is missing from this installation: ' + supervisorPath)
   }
 
@@ -441,7 +454,9 @@ export async function openVerifiedUpdate(
     }
 
     supervisor.once('error', (error) => {
-      void appendUpdateDiagnostic('INSTALL HANDOFF FAILED: PowerShell spawn error: ' + error.message)
+      void appendUpdateDiagnostic(
+        'INSTALL HANDOFF FAILED: PowerShell spawn error: ' + error.message
+      )
       finish({ opened: false, error: 'Could not launch update supervisor: ' + error.message })
     })
 
@@ -454,7 +469,12 @@ export async function openVerifiedUpdate(
             const log = await readFile(logPath, 'utf8')
             if (log.includes(startupMarker)) {
               pendingVerifiedUpdates.delete(operationId)
-              void appendUpdateDiagnostic('SUPERVISOR STARTUP ACKNOWLEDGED; operation=' + operationId + '; version=' + pending.version)
+              void appendUpdateDiagnostic(
+                'SUPERVISOR STARTUP ACKNOWLEDGED; operation=' +
+                  operationId +
+                  '; version=' +
+                  pending.version
+              )
               finish({ opened: true })
               setTimeout(() => app.quit(), 700)
               return
@@ -469,7 +489,11 @@ export async function openVerifiedUpdate(
                 ? String(supervisor.exitCode)
                 : 'signal ' + supervisor.signalCode
             const detail = await readDiagnostics()
-            await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: supervisor exited before startup acknowledgement; exit=' + exitStatus + (detail ? '; diagnostics=' + detail : ''))
+            await appendUpdateDiagnostic(
+              'INSTALL HANDOFF FAILED: supervisor exited before startup acknowledgement; exit=' +
+                exitStatus +
+                (detail ? '; diagnostics=' + detail : '')
+            )
             finish({
               opened: false,
               error:
@@ -486,7 +510,10 @@ export async function openVerifiedUpdate(
         if (!settled) {
           supervisor.kill()
           const detail = await readDiagnostics()
-          await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: supervisor startup acknowledgement timed out after 10 seconds' + (detail ? '; diagnostics=' + detail : ''))
+          await appendUpdateDiagnostic(
+            'INSTALL HANDOFF FAILED: supervisor startup acknowledgement timed out after 10 seconds' +
+              (detail ? '; diagnostics=' + detail : '')
+          )
           finish({
             opened: false,
             error:
