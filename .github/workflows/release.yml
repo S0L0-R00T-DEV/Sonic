@@ -60,12 +60,12 @@ jobs:
       - name: Build signed application, CLI, and browser extension
         shell: pwsh
         run: .\build.ps1 -Release
-      - name: Download v1.1.4 baseline for updater regression
+      - name: Download v1.1.7 baseline for updater regression
         shell: pwsh
         run: |
-          $previousInstaller = Join-Path $env:RUNNER_TEMP 'Sonic-Setup-v1.1.4-x64.exe'
-          Invoke-WebRequest -Uri 'https://github.com/S0L0-R00T-DEV/Sonic/releases/download/v1.1.4/Sonic-Setup-x64.exe' -OutFile $previousInstaller
-          if (-not (Test-Path -LiteralPath $previousInstaller -PathType Leaf) -or (Get-Item $previousInstaller).Length -lt 100000000) { throw 'Could not download the v1.1.4 baseline installer.' }
+          $previousInstaller = Join-Path $env:RUNNER_TEMP 'Sonic-Setup-v1.1.7-x64.exe'
+          Invoke-WebRequest -Uri 'https://github.com/S0L0-R00T-DEV/Sonic/releases/download/v1.1.7/Sonic-Setup-x64.exe' -OutFile $previousInstaller
+          if (-not (Test-Path -LiteralPath $previousInstaller -PathType Leaf) -or (Get-Item $previousInstaller).Length -lt 100000000) { throw 'Could not download the v1.1.7 baseline installer.' }
           "SONIC_PREVIOUS_INSTALLER=$previousInstaller" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Smoke-test installed release and updater regression
         shell: pwsh
