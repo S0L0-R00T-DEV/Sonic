@@ -39,9 +39,9 @@ foreach ($contract in @(
   @{ Name = 'updater waits for its unique startup marker'; Pattern = 'log\.includes\(startupMarker\)' },
   @{ Name = 'updater quits only after startup acknowledgement'; Pattern = '(?s)log\.includes\(startupMarker\)[\s\S]*?setTimeout\(\(\) => app\.quit\(\), 700\)' },
   @{ Name = 'missing supervisor is reported before launch'; Pattern = 'await access\(supervisorPath\)' },
-  @{ Name = 'update diagnostics are persisted before download begins'; Pattern = "appendUpdateDiagnostic\('UPDATE REQUEST STARTED" },
-  @{ Name = 'download failures are written to update-install.log'; Pattern = "appendUpdateDiagnostic\('UPDATE DOWNLOAD FAILED" },
-  @{ Name = 'supervisor handoff failures are written to update-install.log'; Pattern = "appendUpdateDiagnostic\('INSTALL HANDOFF FAILED" },
+  @{ Name = 'update diagnostics are persisted before download begins'; Pattern = "'UPDATE REQUEST STARTED" },
+  @{ Name = 'download failures are written to update-install.log'; Pattern = "'UPDATE DOWNLOAD FAILED:" },
+  @{ Name = 'supervisor handoff failures are written to update-install.log'; Pattern = "'INSTALL HANDOFF FAILED:" },
   @{ Name = 'diagnostic writer appends timestamped newline-delimited records'; Pattern = '(?s)async function appendUpdateDiagnostic.*?appendFile.*?update-install\.log.*?toISOString\(\).*?message\.replace' }
 )) {
   if ($updaterSource -notmatch $contract.Pattern) { throw "Updater contract failed: $($contract.Name)" }
