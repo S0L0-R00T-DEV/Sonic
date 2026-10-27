@@ -120,8 +120,15 @@ jobs:
           '@
           if ($env:TAG -notmatch '^v?\d+\.\d+\.\d+(\.\d+)?
 ) { throw "Invalid release tag: $env:TAG" }
+          $installer = 'ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe'
+          $manifest = 'ui/SonicUI/dist-sonic-release/sonic-update-manifest.json'
           if ($env:EVENT_NAME -eq 'workflow_dispatch') {
-            gh release upload $env:TAG ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe ui/SonicUI/dist-sonic-release/sonic-update-manifest.json --clobber
+            gh release view $env:TAG *> $null
+            if ($LASTEXITCODE -eq 0) {
+              gh release upload $env:TAG $installer $manifest --clobber
+            } else {
+              gh release create $env:TAG $installer $manifest --title "Sonic $($env:TAG.TrimStart('v'))" --notes $notes
+            }
           } else {
-            gh release create $env:TAG ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe ui/SonicUI/dist-sonic-release/sonic-update-manifest.json --title "Sonic $($env:TAG.TrimStart('v'))" --notes $notes
+            gh release create $env:TAG $installer $manifest --title "Sonic $($env:TAG.TrimStart('v'))" --notes $notes
           }
