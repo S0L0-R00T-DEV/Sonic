@@ -63,7 +63,7 @@ foreach ($contract in @(
   @{ Name = 'Sonic validates and honors explicit auto-start handoffs'; Pattern = '(?s)autoStart !== undefined.*?typeof autoStart !== ''boolean''.*?autoStart: request\.autoStart === true' },
   @{ Name = 'renderer auto-start still uses the normal download validation'; Pattern = '(?s)shownLink\?\.autoStart.*?handleStart' }
 )) {
-  $sources = @($remoteSource, $extensionDefaults, $extensionPopup, $extensionOptions, $extensionBackground, $bridgeSource, $rendererNewDownload)
+  $sources = @($aboutDialogSource, $remoteSource, $extensionDefaults, $extensionPopup, $extensionOptions, $extensionBackground, $bridgeSource, $rendererNewDownload)
   $matched = $false
   foreach ($source in $sources) { if ($source -match $contract.Pattern) { $matched = $true; break } }
   if (-not $matched) { throw "Feature contract failed: $($contract.Name)" }
