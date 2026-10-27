@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
@@ -45,6 +45,22 @@ const pendingVerifiedUpdates = new Map<
   string,
   { path: string; sha256: string; fileName: string; version: string }
 >()
+
+/** Persist updater diagnostics before the supervisor starts, so early failures never leave no log. */
+async function appendUpdateDiagnostic(message: string): Promise<void> {
+  try {
+    const userDataPath = app.getPath('userData')
+    await mkdir(userDataPath, { recursive: true })
+    await appendFile(
+      join(userDataPath, 'update-install.log'),
+      '[' + new Date().toISOString() + '] ' + message.replace(/[\\r\\n]+/g, ' ') + '\\n',
+      'utf8'
+    )
+  } catch (error) {
+    // Diagnostics must never block an update attempt; report fallback errors to the main log.
+    console.error('[Sonic updater] could not write update-install.log:', error)
+  }
+}
 
 async function readBoundedBody(
   response: Response,
@@ -210,84 +226,92 @@ export async function downloadVerifiedUpdate(
   expectedFingerprint: string,
   onProgress?: (progress: UpdateDownloadProgress) => void
 ): Promise<{ operationId: string; fileName: string; sha256: string }> {
-  const { release } = await getLatestRelease(repository)
-  const version = (release.tag_name ?? '').replace(/^v/i, '')
-  if (!isNewerVersion(version, app.getVersion()))
-    throw new Error('There is no newer stable release to download.')
-  const { asset, verified } = await getVerifiedAsset(release, publicKeyPem, expectedFingerprint)
-  const url = asset.browser_download_url
-  if (!url?.startsWith('https://github.com/'))
-    throw new Error('Installer URL is not hosted on GitHub.')
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(120000),
-    headers: { 'User-Agent': 'Speed-o-Freq-Sonic-Updater' }
-  })
-  if (!response.ok) throw new Error(`Installer download failed (HTTP ${response.status}).`)
-  if (typeof asset.size === 'number' && asset.size > MAX_UPDATE_BYTES)
-    throw new Error('Update installer exceeds the 1 GiB safety limit.')
-  onProgress?.({
-    bytesDownloaded: 0,
-    totalBytes: asset.size ?? 0,
-    percent: 0,
-    phase: 'downloading'
-  })
-  const bytes = await readBoundedBody(
-    response,
-    MAX_UPDATE_BYTES,
-    (bytesDownloaded, totalBytes) => {
-      const expected = totalBytes || asset.size || 0
-      onProgress?.({
-        bytesDownloaded,
-        totalBytes: expected,
-        percent: expected > 0 ? Math.min(99, Math.floor((bytesDownloaded / expected) * 100)) : 0,
-        phase: 'downloading'
-      })
-    },
-    asset.size ?? 0
-  )
-  if (bytes.byteLength === 0) throw new Error('Downloaded installer is empty.')
-  onProgress?.({
-    bytesDownloaded: bytes.byteLength,
-    totalBytes: bytes.byteLength,
-    percent: 100,
-    phase: 'verifying'
-  })
-  const actual = createHash('sha256').update(bytes).digest('hex')
-  if (actual !== verified.sha256)
-    throw new Error(
-      `Installer SHA-256 mismatch. Expected ${verified.sha256}; got ${actual}. File was not staged.`
+  await appendUpdateDiagnostic('UPDATE REQUEST STARTED; currentVersion=' + app.getVersion())
+  try {
+    const { release } = await getLatestRelease(repository)
+    const version = (release.tag_name ?? '').replace(/^v/i, '')
+    if (!isNewerVersion(version, app.getVersion()))
+      throw new Error('There is no newer stable release to download.')
+    const { asset, verified } = await getVerifiedAsset(release, publicKeyPem, expectedFingerprint)
+    const url = asset.browser_download_url
+    if (!url?.startsWith('https://github.com/'))
+      throw new Error('Installer URL is not hosted on GitHub.')
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(120000),
+      headers: { 'User-Agent': 'Speed-o-Freq-Sonic-Updater' }
+    })
+    if (!response.ok) throw new Error(`Installer download failed (HTTP ${response.status}).`)
+    if (typeof asset.size === 'number' && asset.size > MAX_UPDATE_BYTES)
+      throw new Error('Update installer exceeds the 1 GiB safety limit.')
+    onProgress?.({
+      bytesDownloaded: 0,
+      totalBytes: asset.size ?? 0,
+      percent: 0,
+      phase: 'downloading'
+    })
+    const bytes = await readBoundedBody(
+      response,
+      MAX_UPDATE_BYTES,
+      (bytesDownloaded, totalBytes) => {
+        const expected = totalBytes || asset.size || 0
+        onProgress?.({
+          bytesDownloaded,
+          totalBytes: expected,
+          percent: expected > 0 ? Math.min(99, Math.floor((bytesDownloaded / expected) * 100)) : 0,
+          phase: 'downloading'
+        })
+      },
+      asset.size ?? 0
     )
-  const safeName = basename(verified.assetName).replace(/[^A-Za-z0-9._-]/g, '_')
-  const directory = join(app.getPath('userData'), 'verified-updates')
-  await mkdir(directory, { recursive: true })
-  const operationId = randomUUID()
-  const path = join(directory, `${operationId}-${safeName}`)
-  await writeFile(path, bytes, { flag: 'wx', mode: 0o600 })
-  pendingVerifiedUpdates.set(operationId, {
-    path,
-    sha256: actual,
-    fileName: safeName,
-    version: verified.version
-  })
-  onProgress?.({
-    bytesDownloaded: bytes.byteLength,
-    totalBytes: bytes.byteLength,
-    percent: 100,
-    phase: 'starting-installer'
-  })
-  return { operationId, fileName: safeName, sha256: actual }
+    if (bytes.byteLength === 0) throw new Error('Downloaded installer is empty.')
+    onProgress?.({
+      bytesDownloaded: bytes.byteLength,
+      totalBytes: bytes.byteLength,
+      percent: 100,
+      phase: 'verifying'
+    })
+    const actual = createHash('sha256').update(bytes).digest('hex')
+    if (actual !== verified.sha256)
+      throw new Error(
+        `Installer SHA-256 mismatch. Expected ${verified.sha256}; got ${actual}. File was not staged.`
+      )
+    const safeName = basename(verified.assetName).replace(/[^A-Za-z0-9._-]/g, '_')
+    const directory = join(app.getPath('userData'), 'verified-updates')
+    await mkdir(directory, { recursive: true })
+    const operationId = randomUUID()
+    const path = join(directory, `${operationId}-${safeName}`)
+    await writeFile(path, bytes, { flag: 'wx', mode: 0o600 })
+    pendingVerifiedUpdates.set(operationId, {
+      path,
+      sha256: actual,
+      fileName: safeName,
+      version: verified.version
+    })
+    onProgress?.({
+      bytesDownloaded: bytes.byteLength,
+      totalBytes: bytes.byteLength,
+      percent: 100,
+      phase: 'starting-installer'
+    })
+    return { operationId, fileName: safeName, sha256: actual }
+  
+    await appendUpdateDiagnostic('DOWNLOAD VERIFIED AND STAGED; version=' + verified.version + '; operation=' + operationId)
+  } catch (error) {
+    await appendUpdateDiagnostic('UPDATE DOWNLOAD FAILED: ' + (error instanceof Error ? error.stack ?? error.message : String(error)))
+    throw error
+  }
 }
-
 /** Silently runs only a previously verified Windows installer, then exits so NSIS can replace files.
  * The packaged NSIS installer is configured to relaunch Sonic when installation completes. */
 export async function openVerifiedUpdate(
   operationId: string
 ): Promise<{ opened: boolean; error?: string }> {
+  await appendUpdateDiagnostic('INSTALL HANDOFF REQUESTED; operation=' + operationId)
   const pending = pendingVerifiedUpdates.get(operationId)
-  if (!pending)
-    throw new Error(
-      'Verified installer session was not found. Download and verify the update again.'
-    )
+  if (!pending) {
+    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: verified installer session missing; operation=' + operationId)
+    throw new Error('Verified installer session was not found. Download and verify the update again.')
+  }
   if (process.platform !== 'win32')
     return {
       opened: false,
@@ -302,12 +326,14 @@ export async function openVerifiedUpdate(
   const bytes = await readFile(pending.path)
   if (createHash('sha256').update(bytes).digest('hex') !== pending.sha256) {
     pendingVerifiedUpdates.delete(operationId)
+    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: staged installer SHA-256 mismatch; operation=' + operationId)
     throw new Error('Staged installer changed after verification. It will not be opened.')
   }
   const supervisorPath = join(process.resourcesPath, 'update-supervisor.ps1')
   try {
     await access(supervisorPath)
   } catch {
+    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: update supervisor missing at ' + supervisorPath)
     throw new Error('Update supervisor is missing from this installation: ' + supervisorPath)
   }
 
@@ -416,6 +442,7 @@ export async function openVerifiedUpdate(
     }
 
     supervisor.once('error', (error) => {
+      void appendUpdateDiagnostic('INSTALL HANDOFF FAILED: PowerShell spawn error: ' + error.message)
       finish({ opened: false, error: 'Could not launch update supervisor: ' + error.message })
     })
 
@@ -428,6 +455,7 @@ export async function openVerifiedUpdate(
             const log = await readFile(logPath, 'utf8')
             if (log.includes(startupMarker)) {
               pendingVerifiedUpdates.delete(operationId)
+              void appendUpdateDiagnostic('SUPERVISOR STARTUP ACKNOWLEDGED; operation=' + operationId + '; version=' + pending.version)
               finish({ opened: true })
               setTimeout(() => app.quit(), 700)
               return
@@ -442,6 +470,7 @@ export async function openVerifiedUpdate(
                 ? String(supervisor.exitCode)
                 : 'signal ' + supervisor.signalCode
             const detail = await readDiagnostics()
+            await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: supervisor exited before startup acknowledgement; exit=' + exitStatus + (detail ? '; diagnostics=' + detail : ''))
             finish({
               opened: false,
               error:
@@ -458,6 +487,7 @@ export async function openVerifiedUpdate(
         if (!settled) {
           supervisor.kill()
           const detail = await readDiagnostics()
+          await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: supervisor startup acknowledgement timed out after 10 seconds' + (detail ? '; diagnostics=' + detail : ''))
           finish({
             opened: false,
             error:
