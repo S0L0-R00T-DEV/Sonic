@@ -320,18 +320,28 @@ export async function openVerifiedUpdate(
       'Verified installer session was not found. Download and verify the update again.'
     )
   }
-  if (process.platform !== 'win32')
+  if (process.platform !== 'win32') {
+    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: unsupported platform ' + process.platform)
     return {
       opened: false,
       error: 'In-app installation is currently supported only by the Windows installer.'
     }
-  if (!app.isPackaged)
+  }
+  if (!app.isPackaged) {
+    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: refusing to launch installer from an unpackaged development build')
     return {
       opened: false,
       error:
         'The development app can preview the updater UI, but it will not launch an installer. Test installation from the signed, installed Sonic release.'
     }
-  const bytes = await readFile(pending.path)
+  }
+  let bytes: Buffer
+  try {
+    bytes = await readFile(pending.path)
+  } catch (error) {
+    await appendUpdateDiagnostic('INSTALL HANDOFF FAILED: staged installer could not be read: ' + (error instanceof Error ? error.message : String(error)))
+    throw error
+  }
   if (createHash('sha256').update(bytes).digest('hex') !== pending.sha256) {
     pendingVerifiedUpdates.delete(operationId)
     await appendUpdateDiagnostic(
