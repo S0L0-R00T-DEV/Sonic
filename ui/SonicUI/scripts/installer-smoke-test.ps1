@@ -38,7 +38,7 @@ foreach ($contract in @(
   @{ Name = 'updater spawns PowerShell using the explicit command'; Pattern = 'supervisor = spawn\(powershellPath, supervisorArguments, \{' },
   @{ Name = 'updater waits for its unique startup marker'; Pattern = 'log\.includes\(startupMarker\)' },
   @{ Name = 'updater quits only after startup acknowledgement'; Pattern = '(?s)log\.includes\(startupMarker\)[\s\S]*?setTimeout\(\(\) => app\.quit\(\), 700\)' },
-  @{ Name = 'missing supervisor is reported before launch'; Pattern = 'await access\(supervisorPath\)' }
+  @{ Name = 'missing supervisor is reported before launch'; Pattern = 'await access\(supervisorPath\)' },
   @{ Name = 'update diagnostics are persisted before download begins'; Pattern = "appendUpdateDiagnostic\('UPDATE REQUEST STARTED" },
   @{ Name = 'download failures are written to update-install.log'; Pattern = "appendUpdateDiagnostic\('UPDATE DOWNLOAD FAILED" },
   @{ Name = 'supervisor handoff failures are written to update-install.log'; Pattern = "appendUpdateDiagnostic\('INSTALL HANDOFF FAILED" },
