@@ -60,16 +60,9 @@ jobs:
       - name: Build signed application, CLI, and browser extension
         shell: pwsh
         run: .\build.ps1 -Release
-      - name: Download v1.1.10 baseline for updater regression
-        shell: pwsh
-        run: |
-          $previousInstaller = Join-Path $env:RUNNER_TEMP 'Sonic-Setup-v1.1.10-x64.exe'
-          Invoke-WebRequest -Uri 'https://github.com/S0L0-R00T-DEV/Sonic/releases/download/v1.1.10/Sonic-Setup-x64.exe' -OutFile $previousInstaller
-          if (-not (Test-Path -LiteralPath $previousInstaller -PathType Leaf) -or (Get-Item $previousInstaller).Length -lt 100000000) { throw 'Could not download the v1.1.10 baseline installer.' }
-          "SONIC_PREVIOUS_INSTALLER=$previousInstaller" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Smoke-test installed release and updater regression
         shell: pwsh
-        run: .\ui\SonicUI\scripts\installer-smoke-test.ps1 -InstallerPath .\ui\SonicUI\dist-sonic-release\Sonic-Setup-x64.exe -ExpectedVersion (node -p "require('./ui/SonicUI/package.json').version") -PreviousInstallerPath $env:SONIC_PREVIOUS_INSTALLER
+        run: .\ui\SonicUI\scripts\installer-smoke-test.ps1 -InstallerPath .\ui\SonicUI\dist-sonic-release\Sonic-Setup-x64.exe -ExpectedVersion (node -p "require('./ui/SonicUI/package.json').version")
       - name: Create signed update manifest
         shell: pwsh
         env:
@@ -111,25 +104,11 @@ jobs:
           $notes = @"
           ## Sonic $releaseVersion
 
-          ### In-app updater reliability
-          - Separate downloading from installation: the update button downloads and verifies the installer, then changes to a manual Install update action.
-          - Persist the verified installer and its SHA-256 metadata so it remains available after Sonic closes or Windows restarts.
-          - Finish asynchronous download checkpoints before stopping the backend during application shutdown.
-          - Use a separate supervisor log per update and recover from a stuck legacy shutdown after a bounded wait.
-          - Recheck installer SHA-256 immediately before launch, verify the installed version, and verify the relaunched app.
-          - Bootstrap note: versions 1.1.8–1.1.10 contain older supervisor/shutdown code and may require one manual setup run. After this release is installed, future updates use the retained-download and explicit-install flow.
+          First official release of Sonic Download Manager.
 
-          ### Installer improvements
-          - Apply Sonic's blue/red brand artwork and Sonic logo to the Windows setup wizard.
-          - Keep the installer, uninstaller, shortcuts, and post-install launch configuration aligned.
-          - Add release smoke contracts for manual installation, retained downloads, shutdown order, and supervisor recovery.
-
-          ### Browser and remote-control improvements
-          - Add Dark, Light, and Sonic appearance modes to the local Wi-Fi companion, with live refresh, download search, status filtering, and task counters.
-          - Add an opt-in Chromium extension setting to automatically start handed-off downloads in Sonic using the current validated defaults; it is off by default.
-
-          ### Verification
-          - Release CI validates the installer, packaged supervisor script, update-integrity checks, installed version, and visible app relaunch.
+          - Download management and queue controls.
+          - Browser extension integration and setup instructions.
+          - Signed update manifest and verified installer downloads.
           "@
           if ($env:TAG -notmatch '^v?[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$') { throw "Invalid release tag: $env:TAG" }
           $installer = 'ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe'

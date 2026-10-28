@@ -98,11 +98,13 @@ function App(): React.JSX.Element {
       return true
     }
   })
+  const BROWSER_SETUP_PROMPTED_KEY = 'sonic-browser-setup-prompted-v3'
+
   const [settingsOpen, setSettingsOpen] = useState(() => {
     try {
       return (
         window.localStorage.getItem(TERMS_ACCEPTED_KEY) === '1' &&
-        window.localStorage.getItem('sonic-browser-setup-prompted-v2') !== '1'
+        window.localStorage.getItem(BROWSER_SETUP_PROMPTED_KEY) !== '1'
       )
     } catch {
       return false
@@ -123,7 +125,7 @@ function App(): React.JSX.Element {
     if (!settingsOpen) return
     try {
       // First launch opens the browser setup instructions. Mark them seen so closing the dialog is respected.
-      window.localStorage.setItem('sonic-browser-setup-prompted-v2', '1')
+      window.localStorage.setItem(BROWSER_SETUP_PROMPTED_KEY, '1')
     } catch {
       // A restricted storage environment must not prevent the app from launching.
     }
@@ -205,7 +207,7 @@ function App(): React.JSX.Element {
               mandatory
               onAccept={() => {
                 try {
-                  if (window.localStorage.getItem('sonic-browser-setup-prompted-v2') !== '1') {
+                  if (window.localStorage.getItem(BROWSER_SETUP_PROMPTED_KEY) !== '1') {
                     setSettingsOpen(true)
                   }
                 } catch {

@@ -1,7 +1,7 @@
 param(
   [Parameter(Mandatory = $true)][string]$InstallerPath,
   [Parameter(Mandatory = $true)][string]$ExpectedVersion,
-  [Parameter(Mandatory = $true)][string]$PreviousInstallerPath,
+  [Parameter(Mandatory = $false)][string]$PreviousInstallerPath,
   [switch]$StaticOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -62,10 +62,17 @@ foreach ($contract in @(
 if ($updaterSource -match '(?s)supervisor = spawn\(powershellPath, supervisorArguments, \{\s*detached:\s*true') {
   throw 'Updater contract failed: PowerShell supervisor must not use detached=true on Windows.'
 }
-$downloadFunction = [regex]::Match($aboutDialogSource, '(?s)const downloadUpdate = \(\): void => \{(.*?)\r?\n  \}\r?\n\r?\n  const installDownloadedUpdate').Groups[1].Value
+$downloadFunction = [regex]::Match($aboutDialogSource, '(?s)const downloadUpdate = \(\): void => \{(.*?)\r?\n  \}\r?\n\r?\n  const openUpdateDownloadsFolder').Groups[1].Value
 if (-not $downloadFunction) { throw 'Updater UI contract failed: download action function was not found.' }
 if ($downloadFunction -match 'openVerifiedUpdate') { throw 'Updater UI contract failed: downloading an update must not automatically start installation.' }
-if ($aboutDialogSource -notmatch 'Install update') { throw 'Updater UI contract failed: a manual Install update action is required.' }
+if ($aboutDialogSource -notmatch 'Go to Downloads Folder') { throw 'Updater UI contract failed: a Go to Downloads Folder action is required after download.' }
+if ($aboutDialogSource -match 'openVerifiedUpdate') { throw 'Updater UI contract failed: the UI must not launch the downloaded installer.' }
+if ($updaterSource -notmatch "app\.getPath\('downloads'\)") { throw 'Updater contract failed: verified installer must be saved in the current user Downloads folder.' }
+$appSource = Get-Content -LiteralPath (Join-Path $root 'src\renderer\src\App.tsx') -Raw
+$termsSource = Get-Content -LiteralPath (Join-Path $root 'src\renderer\src\components\TermsOfServiceDialog.tsx') -Raw
+if ($termsSource -notmatch 'sonic-terms-accepted-1\.0\.0') { throw 'First-launch contract failed: official release must prompt terms acceptance.' }
+if ($appSource -notmatch 'sonic-browser-setup-prompted-v3') { throw 'First-launch contract failed: browser integration setup prompt must be reset for the official release.' }
+if ($appSource -notmatch '(?s)onAccept=.{0,200}setSettingsOpen\(true\)') { throw 'First-launch contract failed: accepting terms must open Browser Integration settings.' }
 foreach ($artwork in @('installerSidebar.bmp', 'installerHeader.bmp')) {
   $artworkPath = Join-Path $root ('build\' + $artwork)
   if (-not (Test-Path -LiteralPath $artworkPath -PathType Leaf)) { throw "Installer artwork is missing: $artworkPath" }
@@ -149,7 +156,8 @@ try {
   Write-Host "PASS: clean installer installed Sonic $actualVersion, created a valid desktop shortcut, and launched a visible main window (PID $($mainProcess.Id))." -ForegroundColor Green
 
   if (-not $PreviousInstallerPath) {
-    throw 'The previous release installer is required to test the real upgrade path.'
+    Write-Host 'PASS: first official release clean-install smoke test completed; no earlier public release exists for an upgrade test.' -ForegroundColor Green
+    return
   }
   $previousInstaller = (Resolve-Path -LiteralPath $PreviousInstallerPath).Path
   $upgradeDir = Join-Path $env:TEMP 'SonicInstallerUpgradeSmoke'

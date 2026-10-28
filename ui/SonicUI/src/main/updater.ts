@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
-import { access, appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { access, appendFile, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
@@ -69,9 +69,8 @@ async function readPersistedVerifiedUpdate(): Promise<PendingVerifiedUpdate | nu
       typeof raw.version !== 'string'
     )
       return null
-    const directory = join(app.getPath('userData'), 'verified-updates')
-    if (dirname(raw.path) !== directory || !basename(raw.path).endsWith('-' + raw.fileName))
-      return null
+    const directory = app.getPath('downloads')
+    if (dirname(raw.path) !== directory || basename(raw.path) !== raw.fileName) return null
     await access(raw.path)
     const update = raw as PendingVerifiedUpdate
     pendingVerifiedUpdates.set(update.operationId, update)
@@ -333,12 +332,18 @@ export async function downloadVerifiedUpdate(
       throw new Error(
         `Installer SHA-256 mismatch. Expected ${verified.sha256}; got ${actual}. File was not staged.`
       )
-    const safeName = basename(verified.assetName).replace(/[^A-Za-z0-9._-]/g, '_')
-    const directory = join(app.getPath('userData'), 'verified-updates')
+    const safeName = `Sonic-Setup-v${verified.version}-x64.exe`.replace(/[^A-Za-z0-9._-]/g, '_')
+    const directory = app.getPath('downloads')
     await mkdir(directory, { recursive: true })
     const operationId = randomUUID()
-    const path = join(directory, `${operationId}-${safeName}`)
-    await writeFile(path, bytes, { flag: 'wx', mode: 0o600 })
+    const path = join(directory, safeName)
+    const temporaryInstallerPath = join(directory, `.${operationId}-${safeName}.download`)
+    await writeFile(temporaryInstallerPath, bytes, { flag: 'wx', mode: 0o600 })
+    // Publish only a completely downloaded and hash-verified installer in Downloads.
+    await unlink(path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error
+    })
+    await rename(temporaryInstallerPath, path)
     const pending: PendingVerifiedUpdate = {
       operationId,
       path,

@@ -3,7 +3,7 @@ import { FileText, ShieldAlert } from 'lucide-react'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog'
 
-export const TERMS_ACCEPTED_KEY = 'sonic-terms-accepted-v1'
+export const TERMS_ACCEPTED_KEY = 'sonic-terms-accepted-1.0.0'
 
 export function TermsOfServiceDialog({
   open,

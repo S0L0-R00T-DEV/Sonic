@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Download, ExternalLink, Info, LoaderCircle, RefreshCw } from 'lucide-react'
+import {
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  FolderOpen,
+  Info,
+  LoaderCircle,
+  RefreshCw
+} from 'lucide-react'
 import { describeError } from '../utils/format'
 import sonicBlueLogo from '../assets/brand/sonic-blue.png'
 import sonicBlackLogo from '../assets/brand/sonic-black.png'
@@ -27,7 +35,6 @@ export function AboutDialog({
   const [checking, setChecking] = useState(false)
   const [result, setResult] = useState<UpdateResult | null>(null)
   const [downloading, setDownloading] = useState(false)
-  const [installing, setInstalling] = useState(false)
   const [pendingUpdate, setPendingUpdate] =
     useState<Awaited<ReturnType<typeof window.sonic.getPendingVerifiedUpdate>>>(null)
   const [updateProgress, setUpdateProgress] = useState<UpdateDownloadProgress | null>(null)
@@ -39,16 +46,21 @@ export function AboutDialog({
   const installedVersion = window.sonic.initialState.appVersion ?? 'Unknown'
 
   useEffect(() => {
+    if (!open) return
+    const refresh = (): void => {
+      void window.sonic
+        .getPendingVerifiedUpdate()
+        .then(setPendingUpdate)
+        .catch(() => setPendingUpdate(null))
+    }
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [open])
+
+  useEffect(() => {
     if (!downloading) return
     return window.sonic.onUpdateDownloadProgress(setUpdateProgress)
   }, [downloading])
-
-  const refreshPendingUpdate = (): void => {
-    void window.sonic
-      .getPendingVerifiedUpdate()
-      .then(setPendingUpdate)
-      .catch(() => setPendingUpdate(null))
-  }
 
   const checkForUpdates = (): void => {
     setChecking(true)
@@ -113,7 +125,7 @@ export function AboutDialog({
           phase: 'ready-to-install'
         })
         setMessage(
-          `Sonic ${pending.version} is downloaded and verified. Press Install update when you are ready.`
+          `Sonic ${pending.version} is downloaded and verified in your Downloads folder. Open the folder and run the setup file when ready.`
         )
       })
       .catch((cause: unknown) => {
@@ -122,24 +134,15 @@ export function AboutDialog({
       .finally(() => setDownloading(false))
   }
 
-  const installDownloadedUpdate = (): void => {
-    if (!pendingUpdate || installing) return
-    setInstalling(true)
+  const openUpdateDownloadsFolder = (): void => {
     setMessage(null)
     void window.sonic
-      .openVerifiedUpdate(pendingUpdate.operationId)
-      .then((started) => {
-        if (!started.opened) {
-          setMessage(
-            'The verified update could not be started: ' + (started.error ?? 'unknown error')
-          )
-          setInstalling(false)
-        }
+      .openUpdateDownloadsFolder()
+      .then((opened) => {
+        if (!opened) setMessage('Could not open the Downloads folder. Open it from File Explorer.')
       })
       .catch((cause: unknown) => {
-        setMessage('Update installation could not be started: ' + describeError(cause))
-        setInstalling(false)
-        refreshPendingUpdate()
+        setMessage('Could not open the Downloads folder: ' + describeError(cause))
       })
   }
 
@@ -207,8 +210,8 @@ export function AboutDialog({
               <h3 className="font-semibold">Software updates</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Sonic checks for new stable releases in the background and notifies you when one is
-                available. Downloads are saved locally; installation only begins when you press
-                Install update.
+                available. Verified installers are saved in Downloads; run the setup file manually
+                when ready.
               </p>
             </div>
 
@@ -217,7 +220,7 @@ export function AboutDialog({
               size="sm"
               variant="secondary"
               className="self-start"
-              disabled={checking || downloading || installing}
+              disabled={checking || downloading}
               onClick={checkForUpdates}
             >
               {checking ? (
@@ -240,29 +243,20 @@ export function AboutDialog({
                 ) : pendingUpdate ? (
                   <div className="flex flex-col gap-2">
                     <p className="font-medium text-foreground">
-                      Sonic {pendingUpdate.version} is downloaded and ready to install.
+                      Sonic {pendingUpdate.version} is downloaded and verified.
                     </p>
                     <p>
-                      The installer is saved on this computer and will remain available after you
-                      close and reopen Sonic.
+                      Installer: {pendingUpdate.fileName}. It is saved in your Downloads folder. Run
+                      it manually whenever you are ready.
                     </p>
                     <Button
                       type="button"
                       size="sm"
-                      disabled={installing || downloading}
-                      onClick={installDownloadedUpdate}
+                      disabled={downloading}
+                      onClick={openUpdateDownloadsFolder}
                     >
-                      {installing ? (
-                        <>
-                          <LoaderCircle className="mr-2 size-4 animate-spin" />
-                          Starting installer…
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="mr-2 size-4" />
-                          Install update
-                        </>
-                      )}
+                      <FolderOpen className="mr-2 size-4" />
+                      Go to Downloads Folder
                     </Button>
                   </div>
                 ) : result.updateAvailable ? (
@@ -291,7 +285,7 @@ export function AboutDialog({
                       <Button
                         type="button"
                         size="sm"
-                        disabled={downloading || installing}
+                        disabled={downloading}
                         onClick={downloadUpdate}
                       >
                         {downloading ? (
@@ -372,9 +366,9 @@ export function AboutDialog({
             )}
           </section>
           <p className="text-xs text-muted-foreground">
-            Updates are downloaded and cryptographically verified first. The verified installer is
-            kept on disk until you choose Install update. Sonic never opens an installer whose
-            publisher signature or file hash cannot be verified.
+            Updates are downloaded and cryptographically verified first, then saved in your
+            Downloads folder. Sonic never launches the installer; review and run the verified setup
+            file yourself.
           </p>
         </div>
       </DialogContent>

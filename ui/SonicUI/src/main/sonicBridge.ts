@@ -1143,6 +1143,10 @@ export async function registerSonicBridge(): Promise<void> {
     )
   })
   handle(C.openVerifiedUpdate, async (operationId: string) => openVerifiedUpdate(operationId))
+  handle(C.openUpdateDownloadsFolder, async () => {
+    const error = await shell.openPath(app.getPath('downloads'))
+    return error.length === 0
+  })
   handle(C.fingerprintPublisherKey, async (publicKeyPem: string) => {
     if (typeof publicKeyPem !== 'string' || publicKeyPem.length > 8192)
       throw new Error('Provide an Ed25519 public key PEM (maximum 8 KiB).')

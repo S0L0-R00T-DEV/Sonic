@@ -13,6 +13,7 @@ export const IpcChannels = {
   downloadVerifiedUpdate: 'updater:download-verified',
   updateDownloadProgress: 'updater:download-progress',
   openVerifiedUpdate: 'updater:open-verified',
+  openUpdateDownloadsFolder: 'updater:open-downloads-folder',
   verifyFileSha256: 'integrity:verify-file-sha256',
   fingerprintPublisherKey: 'integrity:fingerprint-publisher-key',
   verifyPublisherManifest: 'integrity:verify-publisher-manifest',

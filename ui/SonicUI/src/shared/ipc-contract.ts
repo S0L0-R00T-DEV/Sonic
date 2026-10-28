@@ -64,6 +64,7 @@ export interface IpcContract {
     result: { operationId: string; fileName: string; sha256: string }
   }
   openVerifiedUpdate: { args: [operationId: string]; result: { opened: boolean; error?: string } }
+  openUpdateDownloadsFolder: { args: []; result: boolean }
   fingerprintPublisherKey: { args: [publicKeyPem: string]; result: string }
   verifyPublisherManifest: {
     args: [manifestJson: string, publicKeyPem: string, expectedFingerprint: string]

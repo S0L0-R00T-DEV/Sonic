@@ -77,6 +77,7 @@ const sonicApi = {
     return () => ipcRenderer.removeListener(IpcChannels.updateDownloadProgress, listener)
   },
   openVerifiedUpdate: (operationId: string) => invoke('openVerifiedUpdate', operationId),
+  openUpdateDownloadsFolder: () => invoke('openUpdateDownloadsFolder'),
   verifyFileSha256: (expectedHash: string) => invoke('verifyFileSha256', expectedHash),
   fingerprintPublisherKey: (publicKeyPem: string) =>
     invoke('fingerprintPublisherKey', publicKeyPem),
