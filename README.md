@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="ui/SonicUI/resources/sonic-icon-blue.png" width="128" alt="Sonic logo">
+  <img src="logo.png" width="128" alt="Sonic logo">
 </p>
 
 <h1 align="center">Sonic</h1>
