@@ -124,8 +124,9 @@ The tree below lists **every file tracked by Git on `main`** at the time this RE
 
 ```text
 Sonic/
-├── .github  # GitHub Actions release automation
-│   └── workflows  # CI and release workflow definitions
+├── .github  # GitHub Actions automation
+│   └── workflows  # Continuous integration and official release workflows
+│       ├── ci.yml  # Pull-request and main-branch lint, typecheck, and formatting checks
 │       └── release.yml  # Official signed release and asset publishing workflow
 ├── src  # Windows .NET backend, shared engine, and CLI
 │   ├── SpeedOFreq.App  # Windows desktop/backend application and download queue services
