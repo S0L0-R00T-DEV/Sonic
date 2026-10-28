@@ -1,26 +1,29 @@
-# Speed-o'-Freq Sonic
+# Sonic UI
 
-Speed-o'-Freq Sonic is a Windows desktop download manager front end connected to the Sonic .NET download backend.
-
-## Current scope
-
-- Branded Electron desktop shell.
-- Direct HTTP/HTTPS download flows through the Sonic backend bridge.
-- Download queue controls and download progress reporting exposed by the connected backend.
-- Magnet links and .torrent support are present in the inherited UI code; end-to-end integration and release testing must pass before treating them as production-ready.
-
-## Browser integration
-
-The optional browser extension supports the detected Chromium browsers and Firefox. Direct-download handoff is **on by default after the user installs the extension**, can be switched off in the extension popup/options, and falls back to the browser if Sonic cannot accept a handoff. Browser security still requires the user to load/enable the extension. See [docs/browser-extension.md](docs/browser-extension.md) for installation, permissions, privacy behavior and test coverage. See [docs/plugins.md](docs/plugins.md) for plugin installation and signing.
+This directory contains Sonic's Electron desktop application, React renderer, browser extensions, updater, and Windows packaging configuration. The repository-level `README.md` is the primary user and contributor guide.
 
 ## Build
 
-Install dependencies with npm, then run `npm run build` for SonicUI and `npm run build:extension` for the browser extension packages. The Windows installer is packaged with electron-builder using electron-builder.yml.
+From the repository root on Windows 10/11 x64, install the required .NET 10 SDK, Node.js 22, npm, and Git, then run:
 
-The backend package is staged from the parent project under artifacts/cli-queue-20261018/win-x64. Build or refresh that package before producing a release installer.
+```powershell
+.\build.ps1
+```
 
-## Source and license attribution
+The root build script is the canonical entry point. It builds the .NET backend and CLI, type-checks and builds the desktop UI and browser extensions, and packages the Windows installer under `ui/SonicUI/dist-sonic-release/`.
 
-The desktop UI is a modified derivative of Sonic by Anmol Kapil, used under the MIT License. The original MIT license and copyright notice are retained in this project. Sonic branding and the Sonic backend integration are project-specific modifications; this notice does not claim original authorship of inherited Sonic code.
+For UI-only development:
 
-See LICENSE for the applicable MIT terms. Third-party dependency notices distributed with Electron and other bundled dependencies must also be retained.
+```powershell
+Set-Location ui/SonicUI
+npm ci
+npm run dev
+```
+
+## Validation
+
+The root GitHub Actions CI workflow runs lint, TypeScript checks, and formatting checks for pull requests targeting `main` and pushes to `main`. Official release builds run the Windows release workflow, which performs signing, security and dependency checks, installer smoke tests, and signed-update-manifest validation.
+
+## Licensing
+
+See the repository-level [MIT License](../../LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md). Preserve applicable upstream license and notice files when redistributing the application.
