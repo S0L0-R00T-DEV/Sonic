@@ -62,7 +62,7 @@ foreach ($contract in @(
 if ($updaterSource -match '(?s)supervisor = spawn\(powershellPath, supervisorArguments, \{\s*detached:\s*true') {
   throw 'Updater contract failed: PowerShell supervisor must not use detached=true on Windows.'
 }
-$downloadFunction = [regex]::Match($aboutDialogSource, '(?s)const downloadUpdate = \(\): void => \{(.*?)\n  \}\n\n  const installDownloadedUpdate').Groups[1].Value
+$downloadFunction = [regex]::Match($aboutDialogSource, '(?s)const downloadUpdate = \(\): void => \{(.*?)\r?\n  \}\r?\n\r?\n  const installDownloadedUpdate').Groups[1].Value
 if (-not $downloadFunction) { throw 'Updater UI contract failed: download action function was not found.' }
 if ($downloadFunction -match 'openVerifiedUpdate') { throw 'Updater UI contract failed: downloading an update must not automatically start installation.' }
 if ($aboutDialogSource -notmatch 'Install update') { throw 'Updater UI contract failed: a manual Install update action is required.' }
