@@ -1,0 +1,4 @@
+# Sonic is owner-maintained. Branch protection must require Code Owner review.
+* @S0L0-R00T-DEV
+/.github/workflows/** @S0L0-R00T-DEV
+/build.ps1 @S0L0-R00T-DEV
