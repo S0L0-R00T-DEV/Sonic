@@ -152,7 +152,6 @@ Sonic/
 ├── ui  # Desktop UI and browser-integration project
 │   └── SonicUI  # Electron, React, updater, browser extension, and packaging project
 │       ├── .github
-│       │   └── workflows  # UI project CI workflow
 │       │       └── ci.yml
 │       ├── .vscode  # VS Code launch and workspace settings
 │       │   ├── extensions.json
