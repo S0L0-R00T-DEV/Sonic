@@ -124,7 +124,8 @@ The tree below lists **every file tracked by Git on `main`** at the time this RE
 
 ```text
 Sonic/
-├── .github  # GitHub Actions automation
+├── .github  # GitHub Actions automation and repository ownership rules
+│   ├── CODEOWNERS  # Assigns the repository owner as code owner
 │   └── workflows  # Continuous integration and official release workflows
 │       ├── ci.yml  # Pull-request and main-branch lint, typecheck, and formatting checks
 │       └── release.yml  # Official signed release and asset publishing workflow
@@ -418,6 +419,7 @@ Sonic/
 ├── .gitignore  # Git exclusions for generated and local files
 ├── build.ps1  # Canonical Windows build and packaging script
 ├── CLI_USAGE.md  # CLI command reference and usage examples
+├── CONTRIBUTING.md  # Issue, pull request, and owner-controlled release policy
 ├── LICENSE  # Repository license
 ├── logo.png  # Main README logo supplied for Sonic branding
 └── README.md  # Project overview, features, setup, and complete source tree
