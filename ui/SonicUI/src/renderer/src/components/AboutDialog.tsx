@@ -191,6 +191,17 @@ export function AboutDialog({
             Sonic on GitHub
           </a>
 
+          <a
+            href="https://github.com/S0L0-R00T-DEV"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 self-start text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+            aria-label="Made by MTSK — open GitHub profile"
+          >
+            Made by MTSK
+            <ExternalLink className="size-3" />
+          </a>
+
           <section className="flex flex-col gap-3 rounded-lg border border-border p-4">
             <div>
               <h3 className="font-semibold">Software updates</h3>
