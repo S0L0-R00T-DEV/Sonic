@@ -367,7 +367,9 @@ export async function openVerifiedUpdate(
   const applicationPath = app.getPath('exe')
   const installDirectory = dirname(applicationPath)
   const userDataPath = app.getPath('userData')
-  const logPath = join(userDataPath, 'update-install.log')
+  // Keep the supervisor's synchronous PowerShell writes separate from the app's async diagnostics.
+  // Concurrent writes to one file can lock the handoff log and abort installation after Sonic quits.
+  const logPath = join(userDataPath, `update-supervisor-${operationId}.log`)
   const stdoutPath = join(userDataPath, `update-supervisor-${operationId}.stdout.log`)
   const stderrPath = join(userDataPath, `update-supervisor-${operationId}.stderr.log`)
   const powershellPath = join(
