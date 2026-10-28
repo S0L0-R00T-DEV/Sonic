@@ -55,6 +55,10 @@ export interface IpcContract {
       error?: string
     }
   }
+  getPendingVerifiedUpdate: {
+    args: []
+    result: { operationId: string; fileName: string; version: string } | null
+  }
   downloadVerifiedUpdate: {
     args: [repository: string]
     result: { operationId: string; fileName: string; sha256: string }

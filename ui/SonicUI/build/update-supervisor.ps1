@@ -56,12 +56,30 @@ try {
   Write-UpdateLog "Target directory: $InstallDirectory"
   Write-UpdateLog "Waiting for Sonic process $OldProcessId to exit"
 
+  $originalProcess = Get-Process -Id $OldProcessId -ErrorAction SilentlyContinue
+  $originalStartTime = if ($originalProcess) { $originalProcess.StartTime } else { $null }
   $exitDeadline = (Get-Date).AddSeconds(45)
   while ((Get-Process -Id $OldProcessId -ErrorAction SilentlyContinue) -and (Get-Date) -lt $exitDeadline) {
     Start-Sleep -Milliseconds 250
   }
-  if (Get-Process -Id $OldProcessId -ErrorAction SilentlyContinue) {
-    throw "Sonic process $OldProcessId did not exit within 45 seconds; installer was not launched."
+  $remainingProcess = Get-Process -Id $OldProcessId -ErrorAction SilentlyContinue
+  if ($remainingProcess) {
+    # Some older Sonic builds can leave the main process stuck in asynchronous before-quit
+    # cleanup. Never wait forever: after 45 seconds, terminate only the same process instance
+    # that was originally handed off, then verify it is gone before touching installed files.
+    if (-not $originalStartTime -or $remainingProcess.StartTime -ne $originalStartTime) {
+      throw "Process ID $OldProcessId was reused before the updater could verify shutdown; installer was not launched."
+    }
+    Write-UpdateLog "Graceful shutdown exceeded 45 seconds; terminating stuck Sonic process $OldProcessId to continue the requested update"
+    Stop-Process -Id $OldProcessId -Force -ErrorAction Stop
+    $forcedExitDeadline = (Get-Date).AddSeconds(10)
+    while ((Get-Process -Id $OldProcessId -ErrorAction SilentlyContinue) -and (Get-Date) -lt $forcedExitDeadline) {
+      Start-Sleep -Milliseconds 250
+    }
+    if (Get-Process -Id $OldProcessId -ErrorAction SilentlyContinue) {
+      throw "Sonic process $OldProcessId could not be terminated; installer was not launched."
+    }
+    Write-UpdateLog "Confirmed stuck Sonic process $OldProcessId exited after forced shutdown"
   }
 
   if (-not (Test-Path -LiteralPath $InstallerPath -PathType Leaf)) {

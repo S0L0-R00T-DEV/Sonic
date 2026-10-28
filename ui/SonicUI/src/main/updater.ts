@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
-import { access, appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { app } from 'electron'
 import { spawn } from 'node:child_process'
@@ -41,10 +41,68 @@ type GitHubRelease = {
 type VerifiedAsset = { version: string; assetName: string; sha256: string; platform?: string }
 const MAX_MANIFEST_BYTES = 1024 * 1024
 const MAX_UPDATE_BYTES = 1024 * 1024 * 1024
-const pendingVerifiedUpdates = new Map<
-  string,
-  { path: string; sha256: string; fileName: string; version: string }
->()
+type PendingVerifiedUpdate = {
+  operationId: string
+  path: string
+  sha256: string
+  fileName: string
+  version: string
+}
+const pendingVerifiedUpdates = new Map<string, PendingVerifiedUpdate>()
+
+function pendingUpdateMetadataPath(): string {
+  return join(app.getPath('userData'), 'verified-updates', 'pending-update.json')
+}
+
+/** Restore the verified download across app restarts; metadata never substitutes for hash verification. */
+async function readPersistedVerifiedUpdate(): Promise<PendingVerifiedUpdate | null> {
+  try {
+    const raw = JSON.parse(
+      await readFile(pendingUpdateMetadataPath(), 'utf8')
+    ) as Partial<PendingVerifiedUpdate>
+    if (
+      typeof raw.operationId !== 'string' ||
+      typeof raw.path !== 'string' ||
+      typeof raw.sha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/i.test(raw.sha256) ||
+      typeof raw.fileName !== 'string' ||
+      typeof raw.version !== 'string'
+    )
+      return null
+    const directory = join(app.getPath('userData'), 'verified-updates')
+    if (dirname(raw.path) !== directory || !basename(raw.path).endsWith('-' + raw.fileName))
+      return null
+    await access(raw.path)
+    const update = raw as PendingVerifiedUpdate
+    pendingVerifiedUpdates.set(update.operationId, update)
+    return update
+  } catch {
+    return null
+  }
+}
+
+/** Returns the retained installer only when the staged file still matches its recorded SHA-256. */
+export async function getPendingVerifiedUpdate(): Promise<{
+  operationId: string
+  fileName: string
+  version: string
+} | null> {
+  const update = await readPersistedVerifiedUpdate()
+  if (!update) return null
+  try {
+    const bytes = await readFile(update.path)
+    if (createHash('sha256').update(bytes).digest('hex') !== update.sha256) {
+      await appendUpdateDiagnostic(
+        'PERSISTED UPDATE REJECTED: staged installer SHA-256 mismatch; version=' + update.version
+      )
+      return null
+    }
+    if (!isNewerVersion(update.version, app.getVersion())) return null
+    return { operationId: update.operationId, fileName: update.fileName, version: update.version }
+  } catch {
+    return null
+  }
+}
 
 /** Persist updater diagnostics before the supervisor starts, so early failures never leave no log. */
 async function appendUpdateDiagnostic(message: string): Promise<void> {
@@ -281,17 +339,28 @@ export async function downloadVerifiedUpdate(
     const operationId = randomUUID()
     const path = join(directory, `${operationId}-${safeName}`)
     await writeFile(path, bytes, { flag: 'wx', mode: 0o600 })
-    pendingVerifiedUpdates.set(operationId, {
+    const pending: PendingVerifiedUpdate = {
+      operationId,
       path,
       sha256: actual,
       fileName: safeName,
       version: verified.version
+    }
+    // Persist after the installer is fully downloaded and verified. The staged file and metadata
+    // intentionally survive Sonic closing, Windows restarts, and later app launches.
+    const metadataPath = pendingUpdateMetadataPath()
+    const temporaryMetadataPath = metadataPath + '.' + operationId + '.tmp'
+    await writeFile(temporaryMetadataPath, JSON.stringify(pending, null, 2), {
+      encoding: 'utf8',
+      mode: 0o600
     })
+    await rename(temporaryMetadataPath, metadataPath)
+    pendingVerifiedUpdates.set(operationId, pending)
     onProgress?.({
       bytesDownloaded: bytes.byteLength,
       totalBytes: bytes.byteLength,
       percent: 100,
-      phase: 'starting-installer'
+      phase: 'ready-to-install'
     })
     await appendUpdateDiagnostic(
       'DOWNLOAD VERIFIED AND STAGED; version=' + verified.version + '; operation=' + operationId
@@ -311,7 +380,11 @@ export async function openVerifiedUpdate(
   operationId: string
 ): Promise<{ opened: boolean; error?: string }> {
   await appendUpdateDiagnostic('INSTALL HANDOFF REQUESTED; operation=' + operationId)
-  const pending = pendingVerifiedUpdates.get(operationId)
+  let pending = pendingVerifiedUpdates.get(operationId)
+  if (!pending) {
+    const persisted = await readPersistedVerifiedUpdate()
+    if (persisted?.operationId === operationId) pending = persisted
+  }
   if (!pending) {
     await appendUpdateDiagnostic(
       'INSTALL HANDOFF FAILED: verified installer session missing; operation=' + operationId

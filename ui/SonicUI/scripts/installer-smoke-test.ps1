@@ -1,7 +1,8 @@
 param(
   [Parameter(Mandatory = $true)][string]$InstallerPath,
   [Parameter(Mandatory = $true)][string]$ExpectedVersion,
-  [Parameter(Mandatory = $true)][string]$PreviousInstallerPath
+  [Parameter(Mandatory = $true)][string]$PreviousInstallerPath,
+  [switch]$StaticOnly
 )
 $ErrorActionPreference = 'Stop'
 $installer = (Resolve-Path -LiteralPath $InstallerPath).Path
@@ -24,11 +25,18 @@ $supervisorTokens = $null
 $supervisorErrors = $null
 [System.Management.Automation.Language.Parser]::ParseFile($supervisorSource, [ref]$supervisorTokens, [ref]$supervisorErrors) | Out-Null
 if ($supervisorErrors.Count -gt 0) { throw ('Update supervisor PowerShell syntax error: ' + ($supervisorErrors.Message -join '; ')) }
+if ($supervisor -notmatch 'Graceful shutdown exceeded 45 seconds; terminating stuck Sonic process') { throw 'Update supervisor has no bounded recovery for an app process stuck during shutdown.' }
+if ($supervisor -notmatch 'originalStartTime|StartTime') { throw 'Update supervisor does not protect against terminating a reused process ID.' }
+$mainSource = Get-Content -LiteralPath (Join-Path $root 'src\main\index.ts') -Raw
+if ($mainSource -notmatch "(?s)app\.on\('will-quit',\s*\(\)\s*=>\s*\{\s*stopSonicBridge\(\)") { throw 'Application shutdown must stop the backend after asynchronous before-quit checkpoints.' }
 foreach ($contract in @(
   @{ Name = 'machine-wide installer permits elevation'; Pattern = '(?m)^\s*perMachine:\s*true\s*$' },
   @{ Name = 'installer finish page launches the app'; Pattern = '(?m)^\s*runAfterFinish:\s*true\s*$' },
   @{ Name = 'desktop shortcut creation is configured'; Pattern = '(?m)^\s*createDesktopShortcut:\s*always\s*$' },
-  @{ Name = 'update supervisor is copied from build into resources'; Pattern = '(?s)extraResources:.*?from: build.*?to: \.\s+filter:.*?update-supervisor\.ps1' }
+  @{ Name = 'update supervisor is copied from build into resources'; Pattern = '(?s)extraResources:.*?from: build.*?to: \.\s+filter:.*?update-supervisor\.ps1' },
+  @{ Name = 'Sonic installer uses branded header artwork'; Pattern = '(?m)^\s*installerHeader:\s*build/installerHeader\.bmp\s*$' },
+  @{ Name = 'Sonic installer uses branded sidebar artwork'; Pattern = '(?m)^\s*installerSidebar:\s*build/installerSidebar\.bmp\s*$' },
+  @{ Name = 'Sonic uninstaller uses branded sidebar artwork'; Pattern = '(?m)^\s*uninstallerSidebar:\s*build/installerSidebar\.bmp\s*$' }
 )) {
   if ($config -notmatch $contract.Pattern) { throw "Installer contract failed: $($contract.Name)" }
 }
@@ -44,12 +52,23 @@ foreach ($contract in @(
   @{ Name = 'update diagnostics are persisted before download begins'; Pattern = "'UPDATE REQUEST STARTED" },
   @{ Name = 'download failures are written to update-install.log'; Pattern = "'UPDATE DOWNLOAD FAILED:" },
   @{ Name = 'supervisor handoff failures are written to update-install.log'; Pattern = "'INSTALL HANDOFF FAILED:" },
-  @{ Name = 'diagnostic writer appends timestamped newline-delimited records'; Pattern = '(?s)async function appendUpdateDiagnostic.*?appendFile.*?update-install\.log.*?toISOString\(\).*?message\.replace' }
+  @{ Name = 'diagnostic writer appends timestamped newline-delimited records'; Pattern = '(?s)async function appendUpdateDiagnostic.*?appendFile.*?update-install\.log.*?toISOString\(\).*?message\.replace' },
+  @{ Name = 'verified installer metadata is persisted on disk'; Pattern = '(?s)pendingUpdateMetadataPath\(\).*?pending-update\.json' },
+  @{ Name = 'persisted installer can be recovered after a process restart'; Pattern = 'export async function getPendingVerifiedUpdate' },
+  @{ Name = 'pending update metadata is written atomically'; Pattern = 'rename\(temporaryMetadataPath, metadataPath\)' }
 )) {
   if ($updaterSource -notmatch $contract.Pattern) { throw "Updater contract failed: $($contract.Name)" }
 }
 if ($updaterSource -match '(?s)supervisor = spawn\(powershellPath, supervisorArguments, \{\s*detached:\s*true') {
   throw 'Updater contract failed: PowerShell supervisor must not use detached=true on Windows.'
+}
+$downloadFunction = [regex]::Match($aboutDialogSource, '(?s)const downloadUpdate = \(\): void => \{(.*?)\n  \}\n\n  const installDownloadedUpdate').Groups[1].Value
+if (-not $downloadFunction) { throw 'Updater UI contract failed: download action function was not found.' }
+if ($downloadFunction -match 'openVerifiedUpdate') { throw 'Updater UI contract failed: downloading an update must not automatically start installation.' }
+if ($aboutDialogSource -notmatch 'Install update') { throw 'Updater UI contract failed: a manual Install update action is required.' }
+foreach ($artwork in @('installerSidebar.bmp', 'installerHeader.bmp')) {
+  $artworkPath = Join-Path $root ('build\' + $artwork)
+  if (-not (Test-Path -LiteralPath $artworkPath -PathType Leaf)) { throw "Installer artwork is missing: $artworkPath" }
 }
 if ($aboutDialogSource -match 'Installer signature and SHA-256 verified') { throw 'Updater UI contract failed: do not claim the installer hash is verified before download.' }
 foreach ($contract in @(
@@ -74,6 +93,10 @@ foreach ($contract in @(
   @{ Name = 'unchecked desktop shortcut is removed'; Pattern = 'RemoveDesktopShortcutIfUnchecked[\s\S]*?Delete "\$newDesktopLink"' }
 )) {
   if ($nsis -notmatch $contract.Pattern) { throw "Installer contract failed: $($contract.Name)" }
+}
+if ($StaticOnly) {
+  Write-Host 'PASS: updater, persistent-download, manual-install, supervisor, and branded-installer contracts.' -ForegroundColor Green
+  exit 0
 }
 if ($env:RUNNER_TEMP) {
   $installDir = Join-Path $env:RUNNER_TEMP 'SonicInstallerSmoke'
@@ -104,6 +127,8 @@ try {
   if ($supervisor -notmatch 'SUPERVISOR STARTED operation=') { throw 'Update supervisor startup handshake marker is missing.' }
   if ($supervisor -notmatch 'UPDATE SUCCESS: installed version verified and a visible Sonic main window is running') { throw 'Update supervisor startup verification is missing.' }
   if ($supervisor -notmatch 'ExpectedSha256|Get-FileHash') { throw 'Update supervisor does not re-check the downloaded installer hash.' }
+  if ($supervisor -notmatch 'Graceful shutdown exceeded 45 seconds; terminating stuck Sonic process') { throw 'Update supervisor has no bounded recovery for an app process stuck during shutdown.' }
+  if ($supervisor -notmatch 'originalStartTime|StartTime') { throw 'Update supervisor does not protect against terminating a reused process ID.' }
   $shortcutPath = Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'Sonic.lnk'
   if (Test-Path $shortcutPath) {
     $shell = New-Object -ComObject WScript.Shell

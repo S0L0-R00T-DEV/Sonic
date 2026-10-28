@@ -2,11 +2,11 @@ name: Windows Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Existing release tag to rebuild and replace its installer and signed manifest (for example v1.1.8)'
+        description: "Existing release tag to rebuild and replace its installer and signed manifest (for example v1.1.8)"
         required: true
         type: string
 
@@ -25,7 +25,7 @@ jobs:
           cache-dependency-path: ui/SonicUI/package-lock.json
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
       - name: Check release tag matches app version
         if: github.event_name == 'push'
         shell: pwsh
@@ -107,17 +107,22 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         shell: pwsh
         run: |
-          $notes = @'
-          ## Sonic 1.1.8
+          $releaseVersion = $env:TAG.TrimStart('v')
+          $notes = @"
+          ## Sonic $releaseVersion
 
           ### In-app updater reliability
-          - Launch the update supervisor from a separately packaged PowerShell script rather than a long inline command.
-          - Keep Sonic open until the supervisor confirms it started; show diagnostic details if handoff fails.
-          - Persist timestamped update diagnostics before download and installer handoff, including early failures that occur before PowerShell starts.
-          - Record download verification, supervisor startup, and handoff failures in update-install.log.
-          - Make updater status text precise: the installer hash is only reported verified after the download is checked.
-          - Recheck installer SHA-256 immediately before launch, verify the installed version, and verify the relaunch.
-          - Add release CI coverage for the supervisor-driven install/update/restart path in an isolated directory.
+          - Separate downloading from installation: the update button downloads and verifies the installer, then changes to a manual Install update action.
+          - Persist the verified installer and its SHA-256 metadata so it remains available after Sonic closes or Windows restarts.
+          - Finish asynchronous download checkpoints before stopping the backend during application shutdown.
+          - Use a separate supervisor log per update and recover from a stuck legacy shutdown after a bounded wait.
+          - Recheck installer SHA-256 immediately before launch, verify the installed version, and verify the relaunched app.
+          - Bootstrap note: versions 1.1.8–1.1.10 contain older supervisor/shutdown code and may require one manual setup run. After this release is installed, future updates use the retained-download and explicit-install flow.
+
+          ### Installer improvements
+          - Apply Sonic's blue/red brand artwork and Sonic logo to the Windows setup wizard.
+          - Keep the installer, uninstaller, shortcuts, and post-install launch configuration aligned.
+          - Add release smoke contracts for manual installation, retained downloads, shutdown order, and supervisor recovery.
 
           ### Browser and remote-control improvements
           - Add Dark, Light, and Sonic appearance modes to the local Wi-Fi companion, with live refresh, download search, status filtering, and task counters.
@@ -125,7 +130,7 @@ jobs:
 
           ### Verification
           - Release CI validates the installer, packaged supervisor script, update-integrity checks, installed version, and visible app relaunch.
-          '@
+          "@
           if ($env:TAG -notmatch '^v?[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$') { throw "Invalid release tag: $env:TAG" }
           $installer = 'ui/SonicUI/dist-sonic-release/Sonic-Setup-x64.exe'
           $manifest = 'ui/SonicUI/dist-sonic-release/sonic-update-manifest.json'

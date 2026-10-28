@@ -15,7 +15,7 @@ export type UpdateDownloadProgress = {
   bytesDownloaded: number
   totalBytes: number
   percent: number
-  phase: 'downloading' | 'verifying' | 'starting-installer'
+  phase: 'downloading' | 'verifying' | 'ready-to-install'
 }
 
 export type RemoteControlScope = 'status:read' | 'task:add' | 'task:control'

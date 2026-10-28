@@ -7,6 +7,7 @@ export const IpcChannels = {
   copyChromiumExtensionFolderPath: 'browser:copy-chromium-extension-folder-path',
   probeUrl: 'download:probe',
   checkForUpdate: 'updater:check',
+  getPendingVerifiedUpdate: 'updater:get-pending-verified',
   updateAvailable: 'updater:available',
   updateDetected: 'updater:detected',
   downloadVerifiedUpdate: 'updater:download-verified',

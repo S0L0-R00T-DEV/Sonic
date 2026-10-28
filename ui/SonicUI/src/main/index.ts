@@ -267,6 +267,12 @@ app.on('before-quit', () => {
   quittingFromTray = true
   tray?.destroy()
   tray = null
+})
+
+// Stop the backend only after all before-quit handlers have completed their asynchronous
+// checkpoints. Doing this in before-quit races sonicBridge's suspendAll() handler: it can kill
+// the backend that the checkpoint is waiting on, leaving the process alive while the updater waits.
+app.on('will-quit', () => {
   stopSonicBridge()
 })
 app.on('window-all-closed', () => {

@@ -45,7 +45,12 @@ import {
   verifyFileSha256,
   verifySignedManifest
 } from './download/integrityVerification'
-import { checkForUpdate, downloadVerifiedUpdate, openVerifiedUpdate } from './updater'
+import {
+  checkForUpdate,
+  downloadVerifiedUpdate,
+  getPendingVerifiedUpdate,
+  openVerifiedUpdate
+} from './updater'
 import {
   UPDATE_PUBLISHER_KEY_FINGERPRINT,
   UPDATE_PUBLISHER_PUBLIC_KEY_PEM
@@ -1121,6 +1126,7 @@ export async function registerSonicBridge(): Promise<void> {
   handle(C.checkForUpdate, async (repository: string) =>
     checkForUpdate(repository, updatePublisherPublicKeyPem, updatePublisherKeyFingerprint)
   )
+  handle(C.getPendingVerifiedUpdate, async () => getPendingVerifiedUpdate())
   handle(C.downloadVerifiedUpdate, async (repository: string) => {
     if (!updatePublisherPublicKeyPem || !updatePublisherKeyFingerprint)
       throw new Error(

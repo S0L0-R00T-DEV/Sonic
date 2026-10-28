@@ -26,7 +26,10 @@ export function AboutDialog({
 }): React.JSX.Element {
   const [checking, setChecking] = useState(false)
   const [result, setResult] = useState<UpdateResult | null>(null)
+  const [downloading, setDownloading] = useState(false)
   const [installing, setInstalling] = useState(false)
+  const [pendingUpdate, setPendingUpdate] =
+    useState<Awaited<ReturnType<typeof window.sonic.getPendingVerifiedUpdate>>>(null)
   const [updateProgress, setUpdateProgress] = useState<UpdateDownloadProgress | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [termsOpen, setTermsOpen] = useState(false)
@@ -36,9 +39,16 @@ export function AboutDialog({
   const installedVersion = window.sonic.initialState.appVersion ?? 'Unknown'
 
   useEffect(() => {
-    if (!installing) return
+    if (!downloading) return
     return window.sonic.onUpdateDownloadProgress(setUpdateProgress)
-  }, [installing])
+  }, [downloading])
+
+  const refreshPendingUpdate = (): void => {
+    void window.sonic
+      .getPendingVerifiedUpdate()
+      .then(setPendingUpdate)
+      .catch(() => setPendingUpdate(null))
+  }
 
   const checkForUpdates = (): void => {
     setChecking(true)
@@ -60,6 +70,14 @@ export function AboutDialog({
     if (!open) return
     let cancelled = false
     void window.sonic
+      .getPendingVerifiedUpdate()
+      .then((pending) => {
+        if (!cancelled) setPendingUpdate(pending)
+      })
+      .catch(() => {
+        if (!cancelled) setPendingUpdate(null)
+      })
+    void window.sonic
       .checkForUpdate(UPDATE_REPOSITORY)
       .then((update) => {
         if (!cancelled) setResult(update)
@@ -78,20 +96,39 @@ export function AboutDialog({
     }
   }, [open, updateNotificationVersion])
 
-  const installUpdate = (): void => {
-    setInstalling(true)
+  const downloadUpdate = (): void => {
+    setDownloading(true)
     setUpdateProgress({ bytesDownloaded: 0, totalBytes: 0, percent: 0, phase: 'downloading' })
     setMessage(null)
     void window.sonic
       .downloadVerifiedUpdate(UPDATE_REPOSITORY)
-      .then(async (download) => {
+      .then(async () => {
+        const pending = await window.sonic.getPendingVerifiedUpdate()
+        if (!pending) throw new Error('The downloaded installer could not be recovered from disk.')
+        setPendingUpdate(pending)
         setUpdateProgress({
           bytesDownloaded: 0,
           totalBytes: 0,
           percent: 100,
-          phase: 'starting-installer'
+          phase: 'ready-to-install'
         })
-        const started = await window.sonic.openVerifiedUpdate(download.operationId)
+        setMessage(
+          `Sonic ${pending.version} is downloaded and verified. Press Install update when you are ready.`
+        )
+      })
+      .catch((cause: unknown) => {
+        setMessage('Update download failed: ' + describeError(cause))
+      })
+      .finally(() => setDownloading(false))
+  }
+
+  const installDownloadedUpdate = (): void => {
+    if (!pendingUpdate || installing) return
+    setInstalling(true)
+    setMessage(null)
+    void window.sonic
+      .openVerifiedUpdate(pendingUpdate.operationId)
+      .then((started) => {
         if (!started.opened) {
           setMessage(
             'The verified update could not be started: ' + (started.error ?? 'unknown error')
@@ -100,8 +137,9 @@ export function AboutDialog({
         }
       })
       .catch((cause: unknown) => {
-        setMessage('Update could not be installed: ' + describeError(cause))
+        setMessage('Update installation could not be started: ' + describeError(cause))
         setInstalling(false)
+        refreshPendingUpdate()
       })
   }
 
@@ -158,7 +196,8 @@ export function AboutDialog({
               <h3 className="font-semibold">Software updates</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Sonic checks for new stable releases in the background and notifies you when one is
-                available. Updates are only installed when you press the update button.
+                available. Downloads are saved locally; installation only begins when you press
+                Install update.
               </p>
             </div>
 
@@ -167,7 +206,7 @@ export function AboutDialog({
               size="sm"
               variant="secondary"
               className="self-start"
-              disabled={checking || installing}
+              disabled={checking || downloading || installing}
               onClick={checkForUpdates}
             >
               {checking ? (
@@ -185,8 +224,36 @@ export function AboutDialog({
 
             {result && (
               <div role="status" className="break-words text-sm text-muted-foreground">
-                {result.error ? (
+                {result.error && !pendingUpdate ? (
                   <p>{result.error}</p>
+                ) : pendingUpdate ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="font-medium text-foreground">
+                      Sonic {pendingUpdate.version} is downloaded and ready to install.
+                    </p>
+                    <p>
+                      The installer is saved on this computer and will remain available after you
+                      close and reopen Sonic.
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={installing || downloading}
+                      onClick={installDownloadedUpdate}
+                    >
+                      {installing ? (
+                        <>
+                          <LoaderCircle className="mr-2 size-4 animate-spin" />
+                          Starting installer…
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="mr-2 size-4" />
+                          Install update
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 ) : result.updateAvailable ? (
                   <div className="flex flex-col gap-2">
                     <p className="font-medium text-foreground">
@@ -210,8 +277,13 @@ export function AboutDialog({
                       </p>
                     )}
                     {result.assetName && result.assetSha256 && !result.verificationError ? (
-                      <Button type="button" size="sm" disabled={installing} onClick={installUpdate}>
-                        {installing ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={downloading || installing}
+                        onClick={downloadUpdate}
+                      >
+                        {downloading ? (
                           <>
                             <LoaderCircle className="mr-2 size-4 animate-spin" />
                             Downloading update…
@@ -219,7 +291,7 @@ export function AboutDialog({
                         ) : (
                           <>
                             <Download className="mr-2 size-4" />
-                            Update Sonic
+                            Download update
                           </>
                         )}
                       </Button>
@@ -239,7 +311,7 @@ export function AboutDialog({
                 )}
               </div>
             )}
-            {installing && updateProgress && (
+            {downloading && updateProgress && (
               <div
                 role="dialog"
                 aria-label="Downloading Sonic update"
@@ -252,7 +324,7 @@ export function AboutDialog({
                       ? 'Downloading update…'
                       : updateProgress.phase === 'verifying'
                         ? 'Verifying downloaded update…'
-                        : 'Starting installer…'}
+                        : 'Download verified'}
                   </p>
                 </div>
                 <div
@@ -276,7 +348,7 @@ export function AboutDialog({
                         : 'Receiving installer…'
                       : updateProgress.phase === 'verifying'
                         ? 'Checking installer SHA-256...'
-                        : '100%'}
+                        : 'Ready when you are'}
                   </span>
                   <span>{updateProgress.percent}%</span>
                 </div>
@@ -289,8 +361,9 @@ export function AboutDialog({
             )}
           </section>
           <p className="text-xs text-muted-foreground">
-            Updates are downloaded and cryptographically verified before installation. Sonic never
-            opens an installer whose publisher signature or file hash cannot be verified.
+            Updates are downloaded and cryptographically verified first. The verified installer is
+            kept on disk until you choose Install update. Sonic never opens an installer whose
+            publisher signature or file hash cannot be verified.
           </p>
         </div>
       </DialogContent>

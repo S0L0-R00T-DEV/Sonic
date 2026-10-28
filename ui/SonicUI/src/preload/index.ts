@@ -64,6 +64,7 @@ const sonicApi = {
   updateSettings: (patch: AppSettings) => invoke('updateSettings', patch),
   probeUrl: (url: string) => invoke('probeUrl', url),
   checkForUpdate: (repository: string) => invoke('checkForUpdate', repository),
+  getPendingVerifiedUpdate: () => invoke('getPendingVerifiedUpdate'),
   downloadVerifiedUpdate: (repository: string) => invoke('downloadVerifiedUpdate', repository),
   onUpdateDownloadProgress: (
     callback: (progress: import('../shared/types').UpdateDownloadProgress) => void
