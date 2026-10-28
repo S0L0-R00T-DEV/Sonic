@@ -19,7 +19,7 @@
 <p align="center">
   <a href="https://github.com/S0L0-R00T-DEV/Sonic/releases/latest"><img src="https://img.shields.io/github/v/release/S0L0-R00T-DEV/Sonic?label=latest%20release" alt="Latest release"></a>
   <a href="https://github.com/S0L0-R00T-DEV/Sonic/releases"><img src="https://img.shields.io/github/downloads/S0L0-R00T-DEV/Sonic/total" alt="GitHub downloads"></a>
-  <a href="https://github.com/S0L0-R00T-DEV/Sonic/actions/workflows/release.yml"><img src="https://github.com/S0L0-R00T-DEV/Sonic/actions/workflows/release.yml/badge.svg?branch=main" alt="Release workflow"></a>
+  <a href="https://github.com/S0L0-R00T-DEV/Sonic/actions/workflows/release.yml"><img src="https://github.com/S0L0-R00T-DEV/Sonic/actions/workflows/release.yml/badge.svg" alt="Release workflow"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/S0L0-R00T-DEV/Sonic" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20%7C%20x64-blue" alt="Windows 10 and 11, x64">
 </p>
