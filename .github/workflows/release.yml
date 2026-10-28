@@ -104,7 +104,7 @@ jobs:
           $notes = @"
           ## Sonic $releaseVersion
 
-          First official release of Sonic Download Manager.
+          Sonic Download Manager release.
 
           - Download management and queue controls.
           - Browser extension integration and setup instructions.
